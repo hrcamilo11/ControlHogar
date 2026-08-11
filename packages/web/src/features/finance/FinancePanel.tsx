@@ -385,8 +385,9 @@ function BalanceView({ homeId }: { homeId: string }) {
 
       // Subtract settlements
       for (const s of settlements ?? []) {
-        if (debts[s.from_user]?.[s.to_user]) {
-          debts[s.from_user][s.to_user] = Math.max(0, debts[s.from_user][s.to_user] - Number(s.amount))
+        const fromDebts = debts[s.from_user]
+        if (fromDebts && fromDebts[s.to_user]) {
+          fromDebts[s.to_user] = Math.max(0, fromDebts[s.to_user] - Number(s.amount))
         }
       }
 
@@ -429,11 +430,11 @@ function BalanceView({ homeId }: { homeId: string }) {
 
   const handleSettle = async (member: MemberBalance) => {
     const amount = Math.abs(member.netBalance)
-    // Find who I owe money to (simplification: settle with the person I owe most)
     const creditors = balances?.filter((b) => b.netBalance > 0) ?? []
     if (creditors.length === 0) return
 
     const topCreditor = creditors.sort((a, b) => b.netBalance - a.netBalance)[0]
+    if (!topCreditor) return
     const settleAmount = Math.min(amount, topCreditor.netBalance)
 
     if (!confirm(`¿Registrar pago de $${settleAmount.toLocaleString('es-CO')} a ${topCreditor.displayName}?`)) return

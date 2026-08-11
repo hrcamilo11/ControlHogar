@@ -259,7 +259,7 @@ function MaintenanceCard({
 
         {nextStatus[item.status] && (
           <button
-            onClick={() => onStatusChange(nextStatus[item.status])}
+            onClick={() => onStatusChange(nextStatus[item.status]!)}
             className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
             data-testid={`maintenance-advance-${item.id}`}
           >

@@ -45,7 +45,10 @@ export function TasksPanel({ homeId }: { homeId: string }) {
         .select('user_id, profiles(display_name)')
         .eq('home_id', homeId)
       if (error) throw error
-      return data as Member[]
+      return (data ?? []).map((m: any) => ({
+        user_id: m.user_id as string,
+        profiles: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles,
+      })) as Member[]
     },
   })
 
