@@ -165,6 +165,19 @@ function MaintenanceCard({
     },
   })
 
+  const { data: photos } = useQuery({
+    queryKey: ['maintenance-photos', item.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('maintenance_photos')
+        .select('*')
+        .eq('maintenance_id', item.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data as { id: string; url: string; caption: string | null; created_at: string }[]
+    },
+  })
+
   const addNoteMutation = useMutation({
     mutationFn: async () => {
       const { data: session } = await supabase.auth.getSession()
@@ -285,7 +298,62 @@ function MaintenanceCard({
           {notes?.length === 0 && <p className="text-xs text-gray-400">Sin notas aún</p>}
         </div>
       )}
+
+      {/* Photos gallery */}
+      {photos && photos.length > 0 && (
+        <div className="mt-3 border-t border-gray-200 pt-3">
+          <p className="text-xs font-medium text-gray-500 mb-2">📷 Fotos ({photos.length})</p>
+          <div className="flex gap-2 flex-wrap">
+            {photos.map((photo) => (
+              <PhotoThumbnail key={photo.id} photo={photo} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function PhotoThumbnail({ photo }: { photo: { id: string; url: string; caption: string | null } }) {
+  const [showModal, setShowModal] = useState(false)
+
+  return (
+    <>
+      <button
+        onClick={() => setShowModal(true)}
+        className="block h-16 w-16 overflow-hidden rounded-lg border border-gray-200 hover:border-primary-400 transition-colors"
+      >
+        <img
+          src={photo.url}
+          alt={photo.caption ?? 'Foto de mantenimiento'}
+          className="h-full w-full object-cover"
+        />
+      </button>
+
+      {showModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-lg hover:bg-gray-100"
+            >
+              ✕
+            </button>
+            <img
+              src={photo.url}
+              alt={photo.caption ?? 'Foto de mantenimiento'}
+              className="max-h-[85vh] max-w-full rounded-lg object-contain"
+            />
+            {photo.caption && (
+              <p className="mt-2 text-center text-sm text-white">{photo.caption}</p>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
