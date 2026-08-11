@@ -5,12 +5,13 @@ import { CreateHomePage } from '../homes/CreateHomePage'
 import { TasksPanel } from '../tasks/TasksPanel'
 import { FinancePanel } from '../finance/FinancePanel'
 import { MaintenancePanel } from '../maintenance/MaintenancePanel'
+import { ActivityFeed } from '../activity/ActivityFeed'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import toast from 'react-hot-toast'
 
-type Tab = 'tasks' | 'finance' | 'maintenance' | 'members'
+type Tab = 'tasks' | 'finance' | 'maintenance' | 'activity' | 'members'
 
 export function DashboardPage() {
   const { session, signOut } = useAuth()
@@ -42,6 +43,7 @@ export function DashboardPage() {
     { key: 'tasks', label: 'Tareas', icon: '📋' },
     { key: 'finance', label: 'Finanzas', icon: '💰' },
     { key: 'maintenance', label: 'Mantenimiento', icon: '🔧' },
+    { key: 'activity', label: 'Actividad', icon: '📢' },
     { key: 'members', label: 'Miembros', icon: '👥' },
   ]
 
@@ -109,6 +111,7 @@ export function DashboardPage() {
         {activeTab === 'tasks' && <TasksPanel homeId={activeHome.id} />}
         {activeTab === 'finance' && <FinancePanel homeId={activeHome.id} />}
         {activeTab === 'maintenance' && <MaintenancePanel homeId={activeHome.id} />}
+        {activeTab === 'activity' && <ActivityFeed homeId={activeHome.id} />}
         {activeTab === 'members' && <MembersPanel members={members} homeId={activeHome.id} />}
       </main>
     </div>
