@@ -1,0 +1,17 @@
+{
+  "name": "@controlhogar/supabase",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "supabase start",
+    "stop": "supabase stop",
+    "reset": "supabase db reset",
+    "migrate:new": "supabase migration new",
+    "migrate:up": "supabase db push",
+    "generate-types": "supabase gen types typescript --local > ../shared/src/types/database.types.ts",
+    "lint": "echo 'No lint for SQL'",
+    "typecheck": "echo 'No typecheck for SQL'",
+    "test": "echo 'DB tests run via shared package integration tests'",
+    "build": "echo 'No build step for supabase package'"
+  }
+}
