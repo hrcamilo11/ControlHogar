@@ -87,20 +87,13 @@ export function LoginPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <button
             onClick={() => handleOAuth('google')}
             className="flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             data-testid="login-google-button"
           >
             Google
-          </button>
-          <button
-            onClick={() => handleOAuth('apple')}
-            className="flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            data-testid="login-apple-button"
-          >
-            Apple
           </button>
         </div>
 
