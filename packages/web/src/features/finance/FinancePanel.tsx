@@ -188,6 +188,8 @@ function CreateExpenseForm({
   const { session } = useAuth()
   const [title, setTitle] = useState('')
   const [amount, setAmount] = useState('')
+  const [categoryId, setCategoryId] = useState('')
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   const { data: members } = useQuery({
@@ -199,6 +201,15 @@ function CreateExpenseForm({
         .eq('home_id', homeId)
       if (error) throw error
       return data
+    },
+  })
+
+  const { data: categories } = useQuery({
+    queryKey: ['expense-categories'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('expense_categories').select('*').order('name')
+      if (error) throw error
+      return data as { id: string; name: string }[]
     },
   })
 
@@ -223,7 +234,7 @@ function CreateExpenseForm({
         amount: numericAmount,
         paid_by: session.user.id,
         split_type: 'equal',
-        category_id: null,
+        category_id: categoryId || null,
       })
       .select()
       .single()
@@ -232,6 +243,14 @@ function CreateExpenseForm({
       toast.error(error.message)
       setIsLoading(false)
       return
+    }
+
+    // Upload receipt if provided
+    if (receiptFile) {
+      const filePath = `${homeId}/${expense.id}.${receiptFile.name.split('.').pop()}`
+      await supabase.storage.from('receipts').upload(filePath, receiptFile)
+      const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(filePath)
+      await supabase.from('expenses').update({ receipt_url: urlData.publicUrl }).eq('id', expense.id)
     }
 
     // Create equal splits for all members (excluding payer)
@@ -266,17 +285,41 @@ function CreateExpenseForm({
         className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         data-testid="expense-form-title"
       />
-      <input
-        type="number"
-        required
-        min="0.01"
-        step="0.01"
-        placeholder="Monto"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-        data-testid="expense-form-amount"
-      />
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="number"
+          required
+          min="0.01"
+          step="0.01"
+          placeholder="Monto"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          data-testid="expense-form-amount"
+        />
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          data-testid="expense-form-category"
+        >
+          <option value="">Sin categoría</option>
+          {categories?.map((cat) => (
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+            className="hidden"
+          />
+          <span className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50">📎 {receiptFile ? receiptFile.name : 'Adjuntar recibo'}</span>
+        </label>
+      </div>
       <p className="text-xs text-gray-500">
         Se dividirá equitativamente entre {members?.length ?? 1} miembros
       </p>
@@ -303,6 +346,7 @@ function CreateExpenseForm({
 
 function BalanceView({ homeId }: { homeId: string }) {
   const { session } = useAuth()
+  const queryClient = useQueryClient()
 
   const { data: balances, isLoading } = useQuery({
     queryKey: ['balance', homeId],
@@ -383,6 +427,34 @@ function BalanceView({ homeId }: { homeId: string }) {
 
   if (isLoading) return <p className="text-gray-500">Calculando balance...</p>
 
+  const handleSettle = async (member: MemberBalance) => {
+    const amount = Math.abs(member.netBalance)
+    // Find who I owe money to (simplification: settle with the person I owe most)
+    const creditors = balances?.filter((b) => b.netBalance > 0) ?? []
+    if (creditors.length === 0) return
+
+    const topCreditor = creditors.sort((a, b) => b.netBalance - a.netBalance)[0]
+    const settleAmount = Math.min(amount, topCreditor.netBalance)
+
+    if (!confirm(`¿Registrar pago de $${settleAmount.toLocaleString('es-CO')} a ${topCreditor.displayName}?`)) return
+
+    const { error } = await supabase.from('settlements').insert({
+      home_id: homeId,
+      from_user: session!.user.id,
+      to_user: topCreditor.userId,
+      amount: settleAmount,
+      confirmed: true,
+      confirmed_at: new Date().toISOString(),
+    })
+
+    if (error) {
+      toast.error(error.message)
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['balance', homeId] })
+      toast.success(`Deuda saldada: $${settleAmount.toLocaleString('es-CO')} a ${topCreditor.displayName}`)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-gray-900">Balance del Hogar</h2>
@@ -403,9 +475,19 @@ function BalanceView({ homeId }: { homeId: string }) {
                 {member.userId === session?.user.id && ' (tú)'}
               </span>
             </div>
-            <span className={`text-lg font-semibold ${member.netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {member.netBalance >= 0 ? '+' : ''}${Math.abs(member.netBalance).toLocaleString('es-CO')}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-lg font-semibold ${member.netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {member.netBalance >= 0 ? '+' : ''}${Math.abs(member.netBalance).toLocaleString('es-CO')}
+              </span>
+              {member.netBalance < 0 && member.userId === session?.user.id && (
+                <button
+                  onClick={() => handleSettle(member)}
+                  className="rounded border border-green-400 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
+                >
+                  💸 Saldar
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

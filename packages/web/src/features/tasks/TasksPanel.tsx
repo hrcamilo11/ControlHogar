@@ -195,16 +195,35 @@ export function TasksPanel({ homeId }: { homeId: string }) {
 }
 
 function TaskHistory({ homeId }: { homeId: string }) {
-  const { data: history, isLoading } = useQuery({
-    queryKey: ['task-history', homeId],
+  const [filterUser, setFilterUser] = useState('')
+
+  const { data: members } = useQuery({
+    queryKey: ['home-members', homeId],
     queryFn: async () => {
       const { data, error } = await supabase
+        .from('home_members')
+        .select('user_id, profiles(display_name)')
+        .eq('home_id', homeId)
+      if (error) throw error
+      return data
+    },
+  })
+
+  const { data: history, isLoading } = useQuery({
+    queryKey: ['task-history', homeId, filterUser],
+    queryFn: async () => {
+      let query = supabase
         .from('task_completions')
         .select('*, tasks!inner(title, home_id), profiles:completed_by(display_name)')
         .eq('tasks.home_id', homeId)
         .order('completed_at', { ascending: false })
         .limit(50)
 
+      if (filterUser) {
+        query = query.eq('completed_by', filterUser)
+      }
+
+      const { data, error } = await query
       if (error) throw error
       return data as TaskCompletion[]
     },
@@ -212,15 +231,31 @@ function TaskHistory({ homeId }: { homeId: string }) {
 
   if (isLoading) return <p className="text-gray-500">Cargando historial...</p>
 
-  if (!history?.length) {
-    return <p className="text-sm text-gray-500">No hay completaciones registradas aún.</p>
-  }
-
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <h3 className="text-lg font-semibold text-gray-900">Historial de Completaciones</h3>
+
+      {/* Filters */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-gray-500">Filtrar por:</span>
+        <select
+          value={filterUser}
+          onChange={(e) => setFilterUser(e.target.value)}
+          className="rounded border border-gray-300 px-2 py-1 text-xs"
+        >
+          <option value="">Todos los miembros</option>
+          {members?.map((m: any) => (
+            <option key={m.user_id} value={m.user_id}>{m.profiles?.display_name}</option>
+          ))}
+        </select>
+      </div>
+
+      {!history?.length && (
+        <p className="text-sm text-gray-500">No hay completaciones registradas aún.</p>
+      )}
+
       <div className="space-y-1">
-        {history.map((entry) => (
+        {history?.map((entry) => (
           <div key={entry.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-4 py-2">
             <div className="flex items-center gap-2">
               <span className="text-green-500">✓</span>

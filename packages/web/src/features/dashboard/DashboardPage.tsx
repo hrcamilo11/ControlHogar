@@ -6,7 +6,7 @@ import { TasksPanel } from '../tasks/TasksPanel'
 import { FinancePanel } from '../finance/FinancePanel'
 import { MaintenancePanel } from '../maintenance/MaintenancePanel'
 import { ActivityFeed } from '../activity/ActivityFeed'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import toast from 'react-hot-toast'
@@ -175,7 +175,12 @@ function MembersPanel({ members, homeId }: { members: unknown[] | undefined; hom
         )}
       </div>
 
-      {showInvite && <InviteMemberForm homeId={homeId} onDone={() => setShowInvite(false)} />}
+      {showInvite && (
+        <>
+          <InviteMemberForm homeId={homeId} onDone={() => setShowInvite(false)} />
+          <PendingInvitations homeId={homeId} />
+        </>
+      )}
 
       <div className="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
         {members.map((member: any) => (
@@ -323,6 +328,67 @@ function InviteMemberForm({ homeId, onDone }: { homeId: string; onDone: () => vo
         </button>
       </div>
     </form>
+  )
+}
+
+function PendingInvitations({ homeId }: { homeId: string }) {
+  const queryClient = useQueryClient()
+
+  const { data: invitations } = useQuery({
+    queryKey: ['invitations', homeId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('invitations')
+        .select('*')
+        .eq('home_id', homeId)
+        .is('accepted_at', null)
+        .is('revoked_at', null)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      return data
+    },
+  })
+
+  const handleRevoke = async (invitationId: string) => {
+    if (!confirm('¿Revocar esta invitación?')) return
+    const { error } = await supabase
+      .from('invitations')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('id', invitationId)
+
+    if (error) {
+      toast.error(error.message)
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['invitations', homeId] })
+      toast.success('Invitación revocada')
+    }
+  }
+
+  if (!invitations?.length) return null
+
+  const activeInvitations = invitations.filter((inv) => new Date(inv.expires_at) > new Date())
+
+  if (!activeInvitations.length) return null
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-gray-500 uppercase">Invitaciones pendientes</p>
+      {activeInvitations.map((inv) => (
+        <div key={inv.id} className="flex items-center justify-between rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2">
+          <div>
+            <p className="text-xs text-gray-700">{inv.email ?? 'Enlace genérico'} — <span className="capitalize">{inv.role}</span></p>
+            <p className="text-xs text-gray-400">Expira {new Date(inv.expires_at).toLocaleString('es-CO')}</p>
+          </div>
+          <button
+            onClick={() => handleRevoke(inv.id)}
+            className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+          >
+            Revocar
+          </button>
+        </div>
+      ))}
+    </div>
   )
 }
 
