@@ -7,6 +7,7 @@ import { FinancePanel } from '../finance/FinancePanel'
 import { MaintenancePanel } from '../maintenance/MaintenancePanel'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import toast from 'react-hot-toast'
 
 type Tab = 'tasks' | 'finance' | 'maintenance' | 'members'
@@ -20,6 +21,9 @@ export function DashboardPage() {
 
   const activeHome = homes?.[activeHomeIndex] ?? null
   const { data: members } = useHomeMembers(activeHome?.id ?? null)
+
+  // Subscribe to realtime changes for this home
+  useRealtimeSync(activeHome?.id ?? null)
 
   if (homesLoading) {
     return (
