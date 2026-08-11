@@ -1,0 +1,8 @@
+{
+  "buildCommand": "pnpm turbo build --filter=@controlhogar/web",
+  "installCommand": "pnpm install",
+  "outputDirectory": "packages/web/dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
