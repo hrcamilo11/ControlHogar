@@ -124,6 +124,9 @@ function TaskCard({
   onComplete: () => void
   isCompleting: boolean
 }) {
+  const [showEdit, setShowEdit] = useState(false)
+  const [editTitle, setEditTitle] = useState(task.title)
+  const queryClient = useQueryClient()
   const isOverdue = task.next_due_date ? new Date(task.next_due_date) < new Date() : false
   const frequencyLabels: Record<string, string> = {
     once: '🔹 Una vez',
@@ -132,6 +135,38 @@ function TaskCard({
     biweekly: '📅 Quincenal',
     monthly: '📅 Mensual',
     custom: '⚙️ Personalizada',
+  }
+
+  const handleDelete = async () => {
+    if (!confirm('¿Eliminar esta tarea?')) return
+    await supabase.from('tasks').update({ is_active: false }).eq('id', task.id)
+    queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    toast.success('Tarea eliminada')
+  }
+
+  const handleEdit = async () => {
+    if (!editTitle.trim()) return
+    await supabase.from('tasks').update({ title: editTitle }).eq('id', task.id)
+    queryClient.invalidateQueries({ queryKey: ['tasks'] })
+    setShowEdit(false)
+    toast.success('Tarea actualizada')
+  }
+
+  if (showEdit) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-primary-300 bg-white p-4">
+        <input
+          type="text"
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none"
+          onKeyDown={(e) => { if (e.key === 'Enter') handleEdit(); if (e.key === 'Escape') setShowEdit(false) }}
+          autoFocus
+        />
+        <button onClick={handleEdit} className="text-sm text-primary-600 font-medium">Guardar</button>
+        <button onClick={() => setShowEdit(false)} className="text-sm text-gray-500">Cancelar</button>
+      </div>
+    )
   }
 
   return (
@@ -163,15 +198,31 @@ function TaskCard({
         )}
       </div>
 
-      <button
-        onClick={onComplete}
-        disabled={isCompleting}
-        className="ml-4 flex h-9 w-9 items-center justify-center rounded-full border-2 border-green-400 text-green-600 hover:bg-green-50 disabled:opacity-50"
-        title="Completar tarea"
-        data-testid={`task-complete-${task.id}`}
-      >
-        ✓
-      </button>
+      <div className="ml-4 flex items-center gap-2">
+        <button
+          onClick={() => setShowEdit(true)}
+          className="text-xs text-gray-400 hover:text-gray-600"
+          title="Editar"
+        >
+          ✏️
+        </button>
+        <button
+          onClick={handleDelete}
+          className="text-xs text-gray-400 hover:text-red-600"
+          title="Eliminar"
+        >
+          🗑️
+        </button>
+        <button
+          onClick={onComplete}
+          disabled={isCompleting}
+          className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-green-400 text-green-600 hover:bg-green-50 disabled:opacity-50"
+          title="Completar tarea"
+          data-testid={`task-complete-${task.id}`}
+        >
+          ✓
+        </button>
+      </div>
     </div>
   )
 }

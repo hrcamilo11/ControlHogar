@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
+import { ShoppingList } from './ShoppingList'
+import { RecurringPayments } from './RecurringPayments'
 
 interface Expense {
   id: string
@@ -22,11 +24,11 @@ interface MemberBalance {
 }
 
 export function FinancePanel({ homeId }: { homeId: string }) {
-  const [activeView, setActiveView] = useState<'expenses' | 'balance'>('expenses')
+  const [activeView, setActiveView] = useState<'expenses' | 'balance' | 'recurring' | 'shopping'>('expenses')
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <button
           onClick={() => setActiveView('expenses')}
           className={`text-sm font-medium ${activeView === 'expenses' ? 'text-primary-600 underline' : 'text-gray-500'}`}
@@ -39,10 +41,24 @@ export function FinancePanel({ homeId }: { homeId: string }) {
         >
           Balance
         </button>
+        <button
+          onClick={() => setActiveView('recurring')}
+          className={`text-sm font-medium ${activeView === 'recurring' ? 'text-primary-600 underline' : 'text-gray-500'}`}
+        >
+          📅 Recurrentes
+        </button>
+        <button
+          onClick={() => setActiveView('shopping')}
+          className={`text-sm font-medium ${activeView === 'shopping' ? 'text-primary-600 underline' : 'text-gray-500'}`}
+        >
+          🛒 Compras
+        </button>
       </div>
 
       {activeView === 'expenses' && <ExpensesView homeId={homeId} />}
       {activeView === 'balance' && <BalanceView homeId={homeId} />}
+      {activeView === 'recurring' && <RecurringPayments homeId={homeId} />}
+      {activeView === 'shopping' && <ShoppingList homeId={homeId} />}
     </div>
   )
 }
@@ -101,18 +117,52 @@ function ExpensesView({ homeId }: { homeId: string }) {
 
       <div className="space-y-2">
         {expenses?.map((expense) => (
-          <div key={expense.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
-            <div>
-              <h3 className="font-medium text-gray-900">{expense.title}</h3>
-              <p className="text-xs text-gray-500">
-                Pagó: {expense.profiles?.display_name ?? 'Desconocido'} · {new Date(expense.created_at).toLocaleDateString('es-CO')}
-              </p>
-            </div>
-            <span className="text-lg font-semibold text-gray-900">
-              ${Number(expense.amount).toLocaleString('es-CO')}
-            </span>
-          </div>
+          <ExpenseCard key={expense.id} expense={expense} homeId={homeId} />
         ))}
+      </div>
+    </div>
+  )
+}
+
+function ExpenseCard({ expense, homeId }: { expense: Expense; homeId: string }) {
+  const queryClient = useQueryClient()
+  const { session } = useAuth()
+
+  const handleDelete = async () => {
+    if (!confirm('¿Eliminar este gasto?')) return
+    const { error } = await supabase.from('expenses').delete().eq('id', expense.id)
+    if (error) {
+      toast.error(error.message)
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['expenses', homeId] })
+      queryClient.invalidateQueries({ queryKey: ['balance', homeId] })
+      toast.success('Gasto eliminado')
+    }
+  }
+
+  const canDelete = expense.paid_by === session?.user.id
+
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4">
+      <div>
+        <h3 className="font-medium text-gray-900">{expense.title}</h3>
+        <p className="text-xs text-gray-500">
+          Pagó: {expense.profiles?.display_name ?? 'Tú'} · {new Date(expense.created_at).toLocaleDateString('es-CO')}
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-lg font-semibold text-gray-900">
+          ${Number(expense.amount).toLocaleString('es-CO')}
+        </span>
+        {canDelete && (
+          <button
+            onClick={handleDelete}
+            className="text-xs text-gray-400 hover:text-red-600"
+            title="Eliminar gasto"
+          >
+            🗑️
+          </button>
+        )}
       </div>
     </div>
   )

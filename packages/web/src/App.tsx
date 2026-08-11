@@ -3,6 +3,7 @@ import { useAuth } from './features/auth/AuthProvider'
 import { LoginPage } from './features/auth/LoginPage'
 import { RegisterPage } from './features/auth/RegisterPage'
 import { VerifyEmailPage } from './features/auth/VerifyEmailPage'
+import { AcceptInvitePage } from './features/auth/AcceptInvitePage'
 import { DashboardPage } from './features/dashboard/DashboardPage'
 import { AuthGuard } from './features/auth/AuthGuard'
 
@@ -29,6 +30,7 @@ export function App() {
         element={session ? <Navigate to="/" replace /> : <RegisterPage />}
       />
       <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/invite/:token" element={<AcceptInvitePage />} />
 
       {/* Protected routes */}
       <Route
