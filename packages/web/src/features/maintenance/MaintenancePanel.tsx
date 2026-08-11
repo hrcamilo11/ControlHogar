@@ -129,6 +129,9 @@ function MaintenanceCard({
   item: Maintenance
   onStatusChange: (status: string) => void
 }) {
+  const [showNotes, setShowNotes] = useState(false)
+  const [newNote, setNewNote] = useState('')
+  const queryClient = useQueryClient()
   const priorityColors = {
     high: 'border-l-red-500 bg-red-50',
     medium: 'border-l-yellow-500 bg-yellow-50',
@@ -148,16 +151,96 @@ function MaintenanceCard({
     in_progress: 'Completar',
   }
 
+  const { data: notes } = useQuery({
+    queryKey: ['maintenance-notes', item.id],
+    enabled: showNotes,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('maintenance_notes')
+        .select('*, profiles:user_id(display_name)')
+        .eq('maintenance_id', item.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+  })
+
+  const addNoteMutation = useMutation({
+    mutationFn: async () => {
+      const { data: session } = await supabase.auth.getSession()
+      if (!session.session) throw new Error('No autenticado')
+      const { error } = await supabase.from('maintenance_notes').insert({
+        maintenance_id: item.id,
+        user_id: session.session.user.id,
+        content: newNote,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['maintenance-notes', item.id] })
+      setNewNote('')
+      toast.success('Nota agregada')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  const handleAddPhoto = async () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+
+      const { data: session } = await supabase.auth.getSession()
+      if (!session.session) return
+
+      const filePath = `${item.id}/${Date.now()}-${file.name}`
+      const { error: uploadError } = await supabase.storage
+        .from('maintenance-photos')
+        .upload(filePath, file)
+
+      if (uploadError) {
+        toast.error('Error subiendo foto')
+        return
+      }
+
+      const { data: urlData } = supabase.storage.from('maintenance-photos').getPublicUrl(filePath)
+
+      await supabase.from('maintenance_photos').insert({
+        maintenance_id: item.id,
+        user_id: session.session.user.id,
+        url: urlData.publicUrl,
+      })
+
+      toast.success('Foto agregada')
+      queryClient.invalidateQueries({ queryKey: ['maintenance-photos', item.id] })
+    }
+    input.click()
+  }
+
   return (
     <div className={`rounded-lg border border-l-4 bg-white p-4 ${priorityColors[item.priority]}`}>
       <div className="flex items-start justify-between">
-        <div>
+        <div className="flex-1">
           <h3 className="font-medium text-gray-900">{item.title}</h3>
           {item.description && <p className="mt-1 text-sm text-gray-600">{item.description}</p>}
-          <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+          <div className="mt-2 flex items-center gap-3 text-xs text-gray-500 flex-wrap">
             <span>{priorityLabels[item.priority]}</span>
             <span className="rounded-full bg-gray-200 px-2 py-0.5">{statusLabels[item.status]}</span>
             <span>{new Date(item.created_at).toLocaleDateString('es-CO')}</span>
+            <button
+              onClick={() => setShowNotes(!showNotes)}
+              className="text-primary-600 hover:text-primary-800 font-medium"
+            >
+              💬 Notas
+            </button>
+            <button
+              onClick={handleAddPhoto}
+              className="text-primary-600 hover:text-primary-800 font-medium"
+            >
+              📷 Foto
+            </button>
           </div>
         </div>
 
@@ -171,6 +254,37 @@ function MaintenanceCard({
           </button>
         )}
       </div>
+
+      {/* Notes section */}
+      {showNotes && (
+        <div className="mt-3 border-t border-gray-200 pt-3 space-y-2">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              placeholder="Agregar nota..."
+              className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none"
+              onKeyDown={(e) => { if (e.key === 'Enter' && newNote.trim()) addNoteMutation.mutate() }}
+            />
+            <button
+              onClick={() => { if (newNote.trim()) addNoteMutation.mutate() }}
+              disabled={!newNote.trim()}
+              className="rounded bg-primary-600 px-2 py-1 text-xs text-white disabled:opacity-50"
+            >
+              +
+            </button>
+          </div>
+          {notes?.map((note: any) => (
+            <div key={note.id} className="rounded bg-gray-50 px-2 py-1 text-xs">
+              <span className="font-medium text-gray-700">{note.profiles?.display_name}:</span>{' '}
+              <span className="text-gray-600">{note.content}</span>
+              <span className="ml-2 text-gray-400">{new Date(note.created_at).toLocaleDateString('es-CO')}</span>
+            </div>
+          ))}
+          {notes?.length === 0 && <p className="text-xs text-gray-400">Sin notas aún</p>}
+        </div>
+      )}
     </div>
   )
 }

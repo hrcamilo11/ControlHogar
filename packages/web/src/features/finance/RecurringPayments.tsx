@@ -81,7 +81,13 @@ export function RecurringPayments({ homeId }: { homeId: string }) {
       queryClient.invalidateQueries({ queryKey: ['balance', homeId] })
       toast.success('Pago registrado como gasto')
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      if (err.message?.includes('duplicate') || err.message?.includes('unique') || err.message?.includes('23505')) {
+        toast.error('Este pago ya fue marcado como pagado este mes')
+      } else {
+        toast.error(err.message)
+      }
+    },
   })
 
   if (isLoading) return <p className="text-gray-500">Cargando pagos...</p>

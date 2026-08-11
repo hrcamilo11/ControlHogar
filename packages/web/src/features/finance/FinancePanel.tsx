@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
 import { ShoppingList } from './ShoppingList'
 import { RecurringPayments } from './RecurringPayments'
+import { BudgetPanel } from './BudgetPanel'
 
 interface Expense {
   id: string
@@ -24,7 +25,7 @@ interface MemberBalance {
 }
 
 export function FinancePanel({ homeId }: { homeId: string }) {
-  const [activeView, setActiveView] = useState<'expenses' | 'balance' | 'recurring' | 'shopping'>('expenses')
+  const [activeView, setActiveView] = useState<'expenses' | 'balance' | 'recurring' | 'budget' | 'shopping'>('expenses')
 
   return (
     <div className="space-y-4">
@@ -48,6 +49,12 @@ export function FinancePanel({ homeId }: { homeId: string }) {
           📅 Recurrentes
         </button>
         <button
+          onClick={() => setActiveView('budget')}
+          className={`text-sm font-medium ${activeView === 'budget' ? 'text-primary-600 underline' : 'text-gray-500'}`}
+        >
+          📊 Presupuesto
+        </button>
+        <button
           onClick={() => setActiveView('shopping')}
           className={`text-sm font-medium ${activeView === 'shopping' ? 'text-primary-600 underline' : 'text-gray-500'}`}
         >
@@ -58,6 +65,7 @@ export function FinancePanel({ homeId }: { homeId: string }) {
       {activeView === 'expenses' && <ExpensesView homeId={homeId} />}
       {activeView === 'balance' && <BalanceView homeId={homeId} />}
       {activeView === 'recurring' && <RecurringPayments homeId={homeId} />}
+      {activeView === 'budget' && <BudgetPanel homeId={homeId} />}
       {activeView === 'shopping' && <ShoppingList homeId={homeId} />}
     </div>
   )

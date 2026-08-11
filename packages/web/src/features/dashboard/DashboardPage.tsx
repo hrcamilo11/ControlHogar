@@ -16,8 +16,9 @@ export function DashboardPage() {
   const { data: homes, isLoading: homesLoading } = useHomes()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
+  const [activeHomeIndex, setActiveHomeIndex] = useState(0)
 
-  const activeHome = homes?.[0] ?? null
+  const activeHome = homes?.[activeHomeIndex] ?? null
   const { data: members } = useHomeMembers(activeHome?.id ?? null)
 
   if (homesLoading) {
@@ -45,14 +46,27 @@ export function DashboardPage() {
       {/* Header */}
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">🏠 {activeHome.name}</h1>
-            {activeHome.description && (
-              <p className="text-sm text-gray-500">{activeHome.description}</p>
+          <div className="flex items-center gap-3">
+            {homes && homes.length > 1 ? (
+              <select
+                value={activeHomeIndex}
+                onChange={(e) => setActiveHomeIndex(Number(e.target.value))}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-bold text-gray-900"
+                data-testid="home-selector"
+              >
+                {homes.map((home, idx) => (
+                  <option key={home.id} value={idx}>🏠 {home.name}</option>
+                ))}
+              </select>
+            ) : (
+              <h1 className="text-xl font-bold text-gray-900">🏠 {activeHome?.name}</h1>
+            )}
+            {activeHome?.description && (
+              <p className="text-sm text-gray-500 hidden md:block">{activeHome.description}</p>
             )}
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{session?.user.email}</span>
+            <span className="text-sm text-gray-600 hidden sm:inline">{session?.user.email}</span>
             <button
               onClick={signOut}
               className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -99,39 +113,104 @@ export function DashboardPage() {
 
 function MembersPanel({ members, homeId }: { members: unknown[] | undefined; homeId: string }) {
   const [showInvite, setShowInvite] = useState(false)
+  const { session } = useAuth()
+  const queryClient = useQueryClient()
 
   if (!members) return <p className="text-gray-500">Cargando miembros...</p>
+
+  const currentUserRole = (members as any[]).find((m: any) => m.user_id === session?.user.id)?.role
+
+  const handleChangeRole = async (userId: string, newRole: string) => {
+    const { error } = await supabase
+      .from('home_members')
+      .update({ role: newRole })
+      .eq('home_id', homeId)
+      .eq('user_id', userId)
+
+    if (error) {
+      toast.error(error.message)
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['home-members', homeId] })
+      toast.success('Rol actualizado')
+    }
+  }
+
+  const handleRemoveMember = async (userId: string, displayName: string) => {
+    if (!confirm(`¿Eliminar a ${displayName} del hogar?`)) return
+    const { error } = await supabase
+      .from('home_members')
+      .delete()
+      .eq('home_id', homeId)
+      .eq('user_id', userId)
+
+    if (error) {
+      toast.error(error.message)
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['home-members', homeId] })
+      toast.success('Miembro eliminado')
+    }
+  }
+
+  const canManage = currentUserRole === 'owner' || currentUserRole === 'admin'
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Miembros ({members.length})</h2>
-        <button
-          onClick={() => setShowInvite(!showInvite)}
-          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-          data-testid="invite-member-button"
-        >
-          + Invitar
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowInvite(!showInvite)}
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+            data-testid="invite-member-button"
+          >
+            + Invitar
+          </button>
+        )}
       </div>
 
       {showInvite && <InviteMemberForm homeId={homeId} onDone={() => setShowInvite(false)} />}
 
       <div className="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
         {members.map((member: any) => (
-          <div key={member.id} className="flex items-center justify-between px-4 py-3">
+          <div key={member.user_id} className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700">
                 {member.profiles?.display_name?.[0]?.toUpperCase() ?? '?'}
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">{member.profiles?.display_name}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {member.profiles?.display_name}
+                  {member.user_id === session?.user.id && ' (tú)'}
+                </p>
                 <p className="text-xs text-gray-500">{member.profiles?.email}</p>
               </div>
             </div>
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getRoleBadgeColor(member.role)}`}>
-              {member.role}
-            </span>
+            <div className="flex items-center gap-2">
+              {canManage && member.role !== 'owner' && member.user_id !== session?.user.id ? (
+                <>
+                  <select
+                    value={member.role}
+                    onChange={(e) => handleChangeRole(member.user_id, e.target.value)}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs"
+                  >
+                    <option value="admin">Admin</option>
+                    <option value="member">Miembro</option>
+                    <option value="guest">Invitado</option>
+                  </select>
+                  <button
+                    onClick={() => handleRemoveMember(member.user_id, member.profiles?.display_name)}
+                    className="text-xs text-red-500 hover:text-red-700"
+                    title="Eliminar del hogar"
+                  >
+                    ✕
+                  </button>
+                </>
+              ) : (
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${getRoleBadgeColor(member.role)}`}>
+                  {member.role}
+                </span>
+              )}
+            </div>
           </div>
         ))}
       </div>
