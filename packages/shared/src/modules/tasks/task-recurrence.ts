@@ -42,6 +42,11 @@ export function calculateNextDueDate(
       return addDays(fromDate, interval).toISOString()
     }
 
+    case 'weekly_custom': {
+      const days = config?.daysOfWeek ?? [1] // Default Monday
+      return getNextCustomWeekday(fromDate, days).toISOString()
+    }
+
     default:
       return null
   }
@@ -93,4 +98,28 @@ function getNextMonthDay(from: Date, targetDay: number): Date {
   result.setDate(Math.min(targetDay, lastDayOfMonth))
 
   return result
+}
+
+/**
+ * Find the next occurrence from a set of weekdays.
+ * E.g., daysOfWeek=[1,3] (Mon, Wed): if today is Monday, next is Wednesday.
+ * If today is Wednesday, next is Monday (next week).
+ */
+function getNextCustomWeekday(from: Date, daysOfWeek: number[]): Date {
+  if (daysOfWeek.length === 0) return addDays(from, 1)
+
+  const sorted = [...daysOfWeek].sort((a, b) => a - b)
+  const currentDay = from.getDay()
+
+  // Find the next day in the list that is after today
+  for (const targetDay of sorted) {
+    if (targetDay > currentDay) {
+      return addDays(from, targetDay - currentDay)
+    }
+  }
+
+  // All target days are <= today, so wrap to next week's first target day
+  const firstDay = sorted[0]!
+  const daysUntilNext = 7 - currentDay + firstDay
+  return addDays(from, daysUntilNext)
 }

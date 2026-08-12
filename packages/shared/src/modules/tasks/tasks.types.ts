@@ -1,7 +1,8 @@
-export type FrequencyType = 'once' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom'
+export type FrequencyType = 'once' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom' | 'weekly_custom'
 
 export interface FrequencyConfig {
-  dayOfWeek?: number // 0=Sun, 1=Mon, ..., 6=Sat
+  dayOfWeek?: number // 0=Sun, 1=Mon, ..., 6=Sat (for 'weekly')
+  daysOfWeek?: number[] // [1, 2] = Mon, Tue (for 'weekly_custom')
   dayOfMonth?: number // 1-28
   intervalDays?: number // for custom
 }

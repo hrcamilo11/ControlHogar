@@ -301,6 +301,7 @@ function TaskCard({
     once: '🔹 Una vez',
     daily: '🔄 Diaria',
     weekly: '📅 Semanal',
+    weekly_custom: '📅 Días personalizados',
     biweekly: '📅 Quincenal',
     monthly: '📅 Mensual',
     custom: '⚙️ Personalizada',
@@ -398,6 +399,7 @@ function CreateTaskForm({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [frequencyType, setFrequencyType] = useState('once')
+  const [selectedDays, setSelectedDays] = useState<number[]>([])
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -407,12 +409,23 @@ function CreateTaskForm({
     )
   }
 
+  const toggleDay = (day: number) => {
+    setSelectedDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)
+    )
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!session) return
+    if (frequencyType === 'weekly_custom' && selectedDays.length === 0) {
+      toast.error('Selecciona al menos un día de la semana')
+      return
+    }
     setIsLoading(true)
 
-    const nextDueDate = frequencyType === 'once' ? null : calculateSimpleNextDue(frequencyType)
+    const frequencyConfig = frequencyType === 'weekly_custom' ? { daysOfWeek: selectedDays } : undefined
+    const nextDueDate = frequencyType === 'once' ? null : calculateSimpleNextDue(frequencyType, frequencyConfig)
 
     const { data: task, error } = await supabase
       .from('tasks')
@@ -422,6 +435,7 @@ function CreateTaskForm({
         description: description || null,
         created_by: session.user.id,
         frequency_type: frequencyType,
+        frequency_config: frequencyConfig ?? null,
         next_due_date: nextDueDate,
       })
       .select()
@@ -475,9 +489,32 @@ function CreateTaskForm({
         <option value="once">Una vez</option>
         <option value="daily">Diaria</option>
         <option value="weekly">Semanal</option>
+        <option value="weekly_custom">Días específicos de la semana</option>
         <option value="biweekly">Quincenal</option>
         <option value="monthly">Mensual</option>
       </select>
+
+      {frequencyType === 'weekly_custom' && (
+        <div>
+          <p className="text-xs font-medium text-gray-700 mb-1">Selecciona los días:</p>
+          <div className="flex gap-1">
+            {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((day, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => toggleDay(idx)}
+                className={`rounded-full w-9 h-9 text-xs font-medium border ${
+                  selectedDays.includes(idx)
+                    ? 'bg-primary-100 border-primary-400 text-primary-700'
+                    : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Assignee selector */}
       <div>
@@ -524,13 +561,33 @@ function CreateTaskForm({
   )
 }
 
-function calculateSimpleNextDue(frequencyType: string): string {
+function calculateSimpleNextDue(frequencyType: string, config?: { daysOfWeek?: number[] }): string {
   const now = new Date()
   switch (frequencyType) {
     case 'daily': now.setDate(now.getDate() + 1); break
     case 'weekly': now.setDate(now.getDate() + 7); break
     case 'biweekly': now.setDate(now.getDate() + 14); break
     case 'monthly': now.setDate(1); now.setMonth(now.getMonth() + 1); break
+    case 'weekly_custom': {
+      const days = config?.daysOfWeek ?? [1]
+      const currentDay = now.getDay()
+      // Find next day in list
+      const sorted = [...days].sort((a, b) => a - b)
+      let found = false
+      for (const targetDay of sorted) {
+        if (targetDay > currentDay) {
+          now.setDate(now.getDate() + (targetDay - currentDay))
+          found = true
+          break
+        }
+      }
+      if (!found) {
+        // Wrap to next week
+        const firstDay = sorted[0] ?? 1
+        now.setDate(now.getDate() + (7 - currentDay + firstDay))
+      }
+      break
+    }
     default: now.setDate(now.getDate() + 1)
   }
   return now.toISOString()
