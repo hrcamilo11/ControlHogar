@@ -262,7 +262,7 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
       // We don't enforce exact total since payer's share is implicit
     }
 
-    if (participants.length < 2) { toast.error('Debe haber al menos 2 participantes'); return }
+    if (participants.length < 1) { toast.error('Debe haber al menos 1 participante'); return }
 
     setIsLoading(true)
 
