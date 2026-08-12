@@ -16,9 +16,11 @@ interface Expense {
   paid_by: string
   split_type: string
   receipt_url: string | null
+  task_id: string | null
   created_at: string
   profiles?: { display_name: string } | null
   expense_categories?: { name: string } | null
+  tasks?: { title: string } | null
 }
 
 interface MemberBalance {
@@ -71,7 +73,7 @@ function ExpensesView({ homeId }: { homeId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('expenses')
-        .select('*, profiles:paid_by(display_name), expense_categories(name)')
+        .select('*, profiles:paid_by(display_name), expense_categories(name), tasks(title)')
         .eq('home_id', homeId)
         .order('created_at', { ascending: false })
         .limit(100)
@@ -195,6 +197,9 @@ function ExpenseCard({ expense, homeId, onEdit }: { expense: Expense; homeId: st
             {expense.receipt_url && (
               <button onClick={() => setShowReceipt(!showReceipt)} className="text-primary-600 hover:text-primary-800 font-medium">📎 Recibo</button>
             )}
+            {expense.tasks?.title && (
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">📋 {expense.tasks.title}</span>
+            )}
           </div>
           {expense.description && <p className="mt-1 text-sm text-gray-600">{expense.description}</p>}
         </div>
@@ -226,6 +231,7 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
   const [description, setDescription] = useState(editingExpense?.description ?? '')
   const [amount, setAmount] = useState(editingExpense ? String(editingExpense.amount) : '')
   const [categoryId, setCategoryId] = useState(editingExpense?.category_id ?? '')
+  const [taskId, setTaskId] = useState(editingExpense?.task_id ?? '')
   const [paidBy, setPaidBy] = useState(editingExpense?.paid_by ?? session?.user.id ?? '')
   const [splitType, setSplitType] = useState<'equal' | 'percentage' | 'fixed'>(
     (editingExpense?.split_type as any) ?? 'equal'
@@ -236,6 +242,14 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
   const [customSplits, setCustomSplits] = useState<Record<string, string>>({})
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+
+  const { data: homeTasks } = useQuery({
+    queryKey: ['tasks-for-expense', homeId],
+    queryFn: async () => {
+      const { data } = await supabase.from('tasks').select('id, title').eq('home_id', homeId).eq('is_active', true).order('title')
+      return data as { id: string; title: string }[] ?? []
+    },
+  })
 
   const toggleParticipant = (uid: string) => {
     if (uid === paidBy) return // Payer is always a participant
@@ -271,7 +285,7 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
       const { error } = await supabase.from('expenses').update({
         title: title.trim(), description: description.trim() || null,
         amount: numericAmount, category_id: categoryId || null,
-        paid_by: paidBy, split_type: splitType,
+        paid_by: paidBy, split_type: splitType, task_id: taskId || null,
       }).eq('id', editingExpense.id)
 
       if (error) { toast.error(error.message); setIsLoading(false); return }
@@ -286,7 +300,7 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
       const { data: expense, error } = await supabase.from('expenses').insert({
         home_id: homeId, title: title.trim(), description: description.trim() || null,
         amount: numericAmount, paid_by: paidBy, split_type: splitType,
-        category_id: categoryId || null,
+        category_id: categoryId || null, task_id: taskId || null,
       }).select().single()
 
       if (error) { toast.error(error.message); setIsLoading(false); return }
@@ -363,6 +377,12 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+
+      {/* Associate with task */}
+      <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <option value="">📋 Sin tarea asociada</option>
+        {homeTasks?.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+      </select>
 
       {/* Who paid */}
       <div>
