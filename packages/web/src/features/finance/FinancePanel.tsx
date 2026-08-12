@@ -386,8 +386,9 @@ function BalanceView({ homeId }: { homeId: string }) {
       // Subtract settlements
       for (const s of settlements ?? []) {
         const fromDebts = debts[s.from_user]
-        if (fromDebts && fromDebts[s.to_user]) {
-          fromDebts[s.to_user] = Math.max(0, fromDebts[s.to_user] - Number(s.amount))
+        const currentDebt = fromDebts?.[s.to_user]
+        if (fromDebts && currentDebt !== undefined) {
+          fromDebts[s.to_user] = Math.max(0, currentDebt - Number(s.amount))
         }
       }
 
