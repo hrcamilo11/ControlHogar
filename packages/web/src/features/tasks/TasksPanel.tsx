@@ -3,14 +3,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
+import { calculateNextDueDate } from '@controlhogar/shared/src/modules/tasks/task-recurrence'
 
 interface Task {
   id: string
   title: string
   description: string | null
   frequency_type: string
+  frequency_config: Record<string, unknown> | null
   next_due_date: string | null
   is_active: boolean
+  created_by: string
+  rotation_enabled: boolean
+  rotation_members: string[]
+  rotation_index: number
   created_at: string
   task_assignments: { user_id: string }[]
 }
@@ -27,30 +33,37 @@ interface TaskCompletion {
 
 interface Member {
   user_id: string
+  role?: string
   profiles: { display_name: string } | null
 }
+
+type SortOption = 'date' | 'title' | 'frequency'
 
 export function TasksPanel({ homeId }: { homeId: string }) {
   const [showForm, setShowForm] = useState(false)
   const [activeView, setActiveView] = useState<'list' | 'history'>('list')
   const [filterAssignee, setFilterAssignee] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<SortOption>('date')
   const { session } = useAuth()
   const queryClient = useQueryClient()
 
   const { data: members } = useQuery({
-    queryKey: ['home-members', homeId],
+    queryKey: ['home-members-full', homeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('home_members')
-        .select('user_id, profiles(display_name)')
+        .select('user_id, role, profiles(display_name)')
         .eq('home_id', homeId)
       if (error) throw error
       return (data ?? []).map((m: any) => ({
         user_id: m.user_id as string,
+        role: m.role as string,
         profiles: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles,
       })) as Member[]
     },
   })
+
+  const currentUserRole = members?.find((m) => m.user_id === session?.user.id)?.role
 
   const { data: tasks, isLoading } = useQuery({
     queryKey: ['tasks', homeId],
@@ -61,7 +74,6 @@ export function TasksPanel({ homeId }: { homeId: string }) {
         .eq('home_id', homeId)
         .eq('is_active', true)
         .order('next_due_date', { ascending: true, nullsFirst: false })
-
       if (error) throw error
       return data as Task[]
     },
@@ -70,124 +82,154 @@ export function TasksPanel({ homeId }: { homeId: string }) {
   const completeMutation = useMutation({
     mutationFn: async (taskId: string) => {
       const task = tasks?.find((t) => t.id === taskId)
-      const wasOverdue = task?.next_due_date ? new Date(task.next_due_date) < new Date() : false
+      if (!task) throw new Error('Tarea no encontrada')
 
+      const wasOverdue = task.next_due_date ? new Date(task.next_due_date) < new Date() : false
+
+      // Insert completion
       await supabase.from('task_completions').insert({
         task_id: taskId,
         completed_by: session!.user.id,
-        due_date: task?.next_due_date ?? null,
+        due_date: task.next_due_date ?? null,
         was_overdue: wasOverdue,
       })
 
-      if (task?.frequency_type === 'once') {
+      if (task.frequency_type === 'once') {
+        // Archive one-time task
         await supabase.from('tasks').update({ is_active: false }).eq('id', taskId)
       } else {
-        const nextDue = calculateSimpleNextDue(task?.frequency_type ?? 'daily')
-        await supabase.from('tasks').update({ next_due_date: nextDue }).eq('id', taskId)
+        // Calculate next due using shared logic with frequency_config
+        const config = task.frequency_config as { dayOfWeek?: number; daysOfWeek?: number[]; dayOfMonth?: number; intervalDays?: number } | null
+        const nextDue = calculateNextDueDate(task.frequency_type as any, config, new Date())
+
+        const updateData: Record<string, unknown> = { next_due_date: nextDue }
+
+        // Handle rotation
+        if (task.rotation_enabled && task.rotation_members.length >= 2) {
+          const newIndex = (task.rotation_index + 1) % task.rotation_members.length
+          updateData.rotation_index = newIndex
+
+          // Reassign to next person
+          await supabase.from('task_assignments').delete().eq('task_id', taskId)
+          await supabase.from('task_assignments').insert({
+            task_id: taskId,
+            user_id: task.rotation_members[newIndex]!,
+          })
+        }
+
+        await supabase.from('tasks').update(updateData).eq('id', taskId)
       }
+    },
+    // Optimistic update
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', homeId] })
+      const previous = queryClient.getQueryData<Task[]>(['tasks', homeId])
+
+      queryClient.setQueryData<Task[]>(['tasks', homeId], (old) =>
+        old?.map((t) => t.id === taskId
+          ? { ...t, next_due_date: t.frequency_type === 'once' ? t.next_due_date : new Date(Date.now() + 86400000).toISOString() }
+          : t
+        ).filter((t) => !(t.id === taskId && t.frequency_type === 'once'))
+      )
+
+      return { previous }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
       queryClient.invalidateQueries({ queryKey: ['task-history', homeId] })
+      queryClient.invalidateQueries({ queryKey: ['summary', homeId] })
       toast.success('¡Tarea completada!')
     },
-    onError: () => toast.error('Error al completar la tarea'),
+    onError: (_err, _taskId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['tasks', homeId], context.previous)
+      }
+      toast.error('Error al completar la tarea')
+    },
   })
 
-  // Filter tasks by assignee
+  // Filter tasks
   const filteredTasks = tasks?.filter((task) => {
     if (filterAssignee === 'all') return true
     if (filterAssignee === 'unassigned') return task.task_assignments.length === 0
     return task.task_assignments.some((a) => a.user_id === filterAssignee)
   })
 
+  // Sort tasks
+  const sortedTasks = [...(filteredTasks ?? [])].sort((a, b) => {
+    switch (sortBy) {
+      case 'title': return a.title.localeCompare(b.title)
+      case 'frequency': return a.frequency_type.localeCompare(b.frequency_type)
+      case 'date':
+      default:
+        if (!a.next_due_date && !b.next_due_date) return 0
+        if (!a.next_due_date) return 1
+        if (!b.next_due_date) return -1
+        return new Date(a.next_due_date).getTime() - new Date(b.next_due_date).getTime()
+    }
+  })
+
   if (isLoading) return <p className="text-gray-500">Cargando tareas...</p>
 
   return (
     <div className="space-y-4">
-      {/* Sub-navigation */}
       <div className="flex items-center gap-4">
-        <button
-          onClick={() => setActiveView('list')}
-          className={`text-sm font-medium ${activeView === 'list' ? 'text-primary-600 underline' : 'text-gray-500'}`}
-        >
-          Tareas activas
-        </button>
-        <button
-          onClick={() => setActiveView('history')}
-          className={`text-sm font-medium ${activeView === 'history' ? 'text-primary-600 underline' : 'text-gray-500'}`}
-        >
-          📜 Historial
-        </button>
+        <button onClick={() => setActiveView('list')} className={`text-sm font-medium ${activeView === 'list' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Tareas activas</button>
+        <button onClick={() => setActiveView('history')} className={`text-sm font-medium ${activeView === 'history' ? 'text-primary-600 underline' : 'text-gray-500'}`}>📜 Historial</button>
       </div>
 
-      {activeView === 'history' && <TaskHistory homeId={homeId} />}
+      {activeView === 'history' && <TaskHistory homeId={homeId} members={members ?? []} />}
 
       {activeView === 'list' && (
         <>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Tareas ({filteredTasks?.length ?? 0})
-            </h2>
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-              data-testid="tasks-add-button"
-            >
-              + Nueva Tarea
-            </button>
+            <h2 className="text-lg font-semibold text-gray-900">Tareas ({sortedTasks.length})</h2>
+            {currentUserRole !== 'guest' && (
+              <button onClick={() => setShowForm(!showForm)} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700" data-testid="tasks-add-button">+ Nueva Tarea</button>
+            )}
           </div>
 
-          {/* Filter by assignee */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-500">Filtrar:</span>
-            <button
-              onClick={() => setFilterAssignee('all')}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${filterAssignee === 'all' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
-            >
-              Todas
-            </button>
-            <button
-              onClick={() => setFilterAssignee(session!.user.id)}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${filterAssignee === session!.user.id ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
-            >
-              Mis tareas
-            </button>
-            <button
-              onClick={() => setFilterAssignee('unassigned')}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${filterAssignee === 'unassigned' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}`}
-            >
-              Sin asignar
-            </button>
+          {/* Filters + Sort */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-500">Filtrar:</span>
+              {['all', session!.user.id, 'unassigned'].map((filter, i) => {
+                const labels = ['Todas', 'Mis tareas', 'Sin asignar']
+                return (
+                  <button key={filter} onClick={() => setFilterAssignee(filter)} className={`rounded-full px-3 py-1 text-xs font-medium ${filterAssignee === filter ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {labels[i]}
+                  </button>
+                )
+              })}
+            </div>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+              <option value="date">Ordenar: Fecha</option>
+              <option value="title">Ordenar: Título</option>
+              <option value="frequency">Ordenar: Frecuencia</option>
+            </select>
           </div>
 
           {showForm && (
-            <CreateTaskForm
-              homeId={homeId}
-              members={members ?? []}
-              onCreated={() => {
-                setShowForm(false)
-                queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
-              }}
-              onCancel={() => setShowForm(false)}
-            />
+            <CreateTaskForm homeId={homeId} members={members ?? []} onCreated={() => { setShowForm(false); queryClient.invalidateQueries({ queryKey: ['tasks', homeId] }) }} onCancel={() => setShowForm(false)} />
           )}
 
-          {filteredTasks?.length === 0 && !showForm && (
+          {sortedTasks.length === 0 && !showForm && (
             <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
               <p className="text-gray-500">No hay tareas. ¡Crea la primera!</p>
             </div>
           )}
 
           <div className="space-y-2">
-            {filteredTasks?.map((task) => (
+            {sortedTasks.map((task) => (
               <TaskCard
                 key={task.id}
                 task={task}
                 members={members ?? []}
                 homeId={homeId}
+                currentUserId={session!.user.id}
+                currentUserRole={currentUserRole ?? 'member'}
                 onComplete={() => completeMutation.mutate(task.id)}
-                isCompleting={completeMutation.isPending}
+                isCompleting={completeMutation.isPending && completeMutation.variables === task.id}
               />
             ))}
           </div>
@@ -197,20 +239,8 @@ export function TasksPanel({ homeId }: { homeId: string }) {
   )
 }
 
-function TaskHistory({ homeId }: { homeId: string }) {
+function TaskHistory({ homeId, members }: { homeId: string; members: Member[] }) {
   const [filterUser, setFilterUser] = useState('')
-
-  const { data: members } = useQuery({
-    queryKey: ['home-members', homeId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('home_members')
-        .select('user_id, profiles(display_name)')
-        .eq('home_id', homeId)
-      if (error) throw error
-      return data
-    },
-  })
 
   const { data: history, isLoading } = useQuery({
     queryKey: ['task-history', homeId, filterUser],
@@ -222,10 +252,7 @@ function TaskHistory({ homeId }: { homeId: string }) {
         .order('completed_at', { ascending: false })
         .limit(50)
 
-      if (filterUser) {
-        query = query.eq('completed_by', filterUser)
-      }
-
+      if (filterUser) query = query.eq('completed_by', filterUser)
       const { data, error } = await query
       if (error) throw error
       return data as TaskCompletion[]
@@ -237,26 +264,16 @@ function TaskHistory({ homeId }: { homeId: string }) {
   return (
     <div className="space-y-3">
       <h3 className="text-lg font-semibold text-gray-900">Historial de Completaciones</h3>
-
-      {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-gray-500">Filtrar por:</span>
-        <select
-          value={filterUser}
-          onChange={(e) => setFilterUser(e.target.value)}
-          className="rounded border border-gray-300 px-2 py-1 text-xs"
-        >
-          <option value="">Todos los miembros</option>
-          {members?.map((m: any) => (
+        <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+          <option value="">Todos</option>
+          {members.map((m) => (
             <option key={m.user_id} value={m.user_id}>{m.profiles?.display_name}</option>
           ))}
         </select>
       </div>
-
-      {!history?.length && (
-        <p className="text-sm text-gray-500">No hay completaciones registradas aún.</p>
-      )}
-
+      {!history?.length && <p className="text-sm text-gray-500">No hay completaciones registradas.</p>}
       <div className="space-y-1">
         {history?.map((entry) => (
           <div key={entry.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-4 py-2">
@@ -264,14 +281,10 @@ function TaskHistory({ homeId }: { homeId: string }) {
               <span className="text-green-500">✓</span>
               <div>
                 <p className="text-sm font-medium text-gray-900">{(entry.tasks as any)?.title}</p>
-                <p className="text-xs text-gray-500">
-                  {(entry.profiles as any)?.display_name} · {new Date(entry.completed_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <p className="text-xs text-gray-500">{(entry.profiles as any)?.display_name} · {new Date(entry.completed_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
               </div>
             </div>
-            {entry.was_overdue && (
-              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">Atrasada</span>
-            )}
+            {entry.was_overdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">Atrasada</span>}
           </div>
         ))}
       </div>
@@ -280,32 +293,19 @@ function TaskHistory({ homeId }: { homeId: string }) {
 }
 
 function TaskCard({
-  task,
-  members,
-  homeId,
-  onComplete,
-  isCompleting,
+  task, members, homeId, currentUserId, currentUserRole, onComplete, isCompleting,
 }: {
-  task: Task
-  members: Member[]
-  homeId: string
-  onComplete: () => void
-  isCompleting: boolean
+  task: Task; members: Member[]; homeId: string; currentUserId: string; currentUserRole: string; onComplete: () => void; isCompleting: boolean
 }) {
   const [showEdit, setShowEdit] = useState(false)
-  const [editTitle, setEditTitle] = useState(task.title)
+  const [showAssignEdit, setShowAssignEdit] = useState(false)
   const queryClient = useQueryClient()
-  const isOverdue = task.next_due_date ? new Date(task.next_due_date) < new Date() : false
 
-  const frequencyLabels: Record<string, string> = {
-    once: '🔹 Una vez',
-    daily: '🔄 Diaria',
-    weekly: '📅 Semanal',
-    weekly_custom: '📅 Días personalizados',
-    biweekly: '📅 Quincenal',
-    monthly: '📅 Mensual',
-    custom: '⚙️ Personalizada',
-  }
+  const isOverdue = task.next_due_date ? new Date(task.next_due_date) < new Date() : false
+  const isAssignedToMe = task.task_assignments.some((a) => a.user_id === currentUserId)
+  const isGuest = currentUserRole === 'guest'
+  const canEdit = !isGuest && (task.created_by === currentUserId || currentUserRole === 'owner' || currentUserRole === 'admin')
+  const canComplete = isGuest ? isAssignedToMe : true
 
   const assignedNames = task.task_assignments
     .map((a) => members.find((m) => m.user_id === a.user_id)?.profiles?.display_name)
@@ -318,142 +318,381 @@ function TaskCard({
     toast.success('Tarea eliminada')
   }
 
-  const handleEdit = async () => {
-    if (!editTitle.trim()) return
-    await supabase.from('tasks').update({ title: editTitle }).eq('id', task.id)
+  const handleUpdateAssignees = async (userIds: string[]) => {
+    await supabase.from('task_assignments').delete().eq('task_id', task.id)
+    if (userIds.length > 0) {
+      await supabase.from('task_assignments').insert(userIds.map((uid) => ({ task_id: task.id, user_id: uid })))
+    }
     queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
-    setShowEdit(false)
-    toast.success('Tarea actualizada')
+    setShowAssignEdit(false)
+    toast.success('Asignación actualizada')
   }
 
   if (showEdit) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-primary-300 bg-white p-4">
-        <input
-          type="text"
-          value={editTitle}
-          onChange={(e) => setEditTitle(e.target.value)}
-          className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-primary-500 focus:outline-none"
-          onKeyDown={(e) => { if (e.key === 'Enter') handleEdit(); if (e.key === 'Escape') setShowEdit(false) }}
-          autoFocus
-        />
-        <button onClick={handleEdit} className="text-sm text-primary-600 font-medium">Guardar</button>
-        <button onClick={() => setShowEdit(false)} className="text-sm text-gray-500">Cancelar</button>
-      </div>
+      <EditTaskForm
+        task={task}
+        members={members}
+        homeId={homeId}
+        onSaved={() => { setShowEdit(false); queryClient.invalidateQueries({ queryKey: ['tasks', homeId] }) }}
+        onCancel={() => setShowEdit(false)}
+      />
     )
   }
 
   return (
-    <div className={`flex items-center justify-between rounded-lg border bg-white p-4 ${isOverdue ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <h3 className="font-medium text-gray-900">{task.title}</h3>
-          {isOverdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Atrasada</span>}
+    <div className={`rounded-lg border bg-white p-4 transition-all ${isOverdue ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-gray-900">{task.title}</h3>
+            {isOverdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Atrasada</span>}
+            {task.rotation_enabled && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">🔄 Rotación</span>}
+          </div>
+          <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 flex-wrap">
+            <span>{formatFrequencyDisplay(task.frequency_type, task.frequency_config)}</span>
+            {task.next_due_date && (
+              <span>📅 {new Date(task.next_due_date).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+            )}
+            {!task.next_due_date && task.frequency_type === 'once' && (
+              <span className="italic text-gray-400">Sin fecha límite</span>
+            )}
+            <button onClick={() => setShowAssignEdit(!showAssignEdit)} className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 hover:bg-blue-100">
+              👤 {assignedNames.length > 0 ? assignedNames.join(', ') : 'Sin asignar'}
+            </button>
+          </div>
+          {task.description && <p className="mt-1 text-sm text-gray-600">{task.description}</p>}
         </div>
-        <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 flex-wrap">
-          <span>{frequencyLabels[task.frequency_type] ?? task.frequency_type}</span>
-          {task.next_due_date && (
-            <span>📅 {new Date(task.next_due_date).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+
+        <div className="ml-4 flex items-center gap-2">
+          {canEdit && (
+            <>
+              <button onClick={() => setShowEdit(true)} className="text-xs text-gray-400 hover:text-gray-600" title="Editar">✏️</button>
+              <button onClick={handleDelete} className="text-xs text-gray-400 hover:text-red-600" title="Eliminar">🗑️</button>
+            </>
           )}
-          {assignedNames.length > 0 && (
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
-              👤 {assignedNames.join(', ')}
-            </span>
-          )}
-          {assignedNames.length === 0 && (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500">Sin asignar</span>
+          {canComplete && (
+            <button
+              onClick={onComplete}
+              disabled={isCompleting}
+              className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-green-400 text-green-600 hover:bg-green-50 disabled:opacity-50 transition-all"
+              title="Completar tarea"
+              data-testid={`task-complete-${task.id}`}
+            >
+              {isCompleting ? '...' : '✓'}
+            </button>
           )}
         </div>
-        {task.description && <p className="mt-1 text-sm text-gray-600">{task.description}</p>}
       </div>
 
-      <div className="ml-4 flex items-center gap-2">
-        <button onClick={() => setShowEdit(true)} className="text-xs text-gray-400 hover:text-gray-600" title="Editar">✏️</button>
-        <button onClick={handleDelete} className="text-xs text-gray-400 hover:text-red-600" title="Eliminar">🗑️</button>
-        <button
-          onClick={onComplete}
-          disabled={isCompleting}
-          className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-green-400 text-green-600 hover:bg-green-50 disabled:opacity-50"
-          title="Completar tarea"
-          data-testid={`task-complete-${task.id}`}
-        >
-          ✓
-        </button>
+      {/* Inline assignee editor */}
+      {showAssignEdit && canEdit && (
+        <AssigneeEditor taskId={task.id} members={members} currentAssignees={task.task_assignments.map((a) => a.user_id)} onSave={handleUpdateAssignees} onCancel={() => setShowAssignEdit(false)} />
+      )}
+    </div>
+  )
+}
+
+function EditTaskForm({ task, members, homeId, onSaved, onCancel }: {
+  task: Task; members: Member[]; homeId: string; onSaved: () => void; onCancel: () => void
+}) {
+  const config = task.frequency_config as Record<string, any> | null
+  const [title, setTitle] = useState(task.title)
+  const [description, setDescription] = useState(task.description ?? '')
+  const [frequencyType, setFrequencyType] = useState(task.frequency_type === 'weekly_custom' ? 'weekly' : task.frequency_type)
+  const [selectedDays, setSelectedDays] = useState<number[]>(config?.daysOfWeek ?? [])
+  const [dayOfMonth, setDayOfMonth] = useState(config?.dayOfMonth ?? 1)
+  const [hour, setHour] = useState(config?.hour ?? 8)
+  const [minute, setMinute] = useState(config?.minute ?? 0)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const toggleDay = (day: number) => setSelectedDays((p) => p.includes(day) ? p.filter((d) => d !== day) : [...p, day].sort((a, b) => a - b))
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if ((frequencyType === 'weekly' || frequencyType === 'biweekly') && selectedDays.length === 0) {
+      toast.error('Selecciona al menos un día')
+      return
+    }
+    setIsLoading(true)
+
+    let frequencyConfig: Record<string, unknown> | null = null
+    let actualFrequencyType = frequencyType
+
+    switch (frequencyType) {
+      case 'daily':
+        frequencyConfig = { hour, minute }
+        break
+      case 'weekly':
+        actualFrequencyType = 'weekly_custom'
+        frequencyConfig = { daysOfWeek: selectedDays, hour, minute }
+        break
+      case 'biweekly':
+        frequencyConfig = { daysOfWeek: selectedDays, hour, minute }
+        break
+      case 'monthly':
+        frequencyConfig = { dayOfMonth, hour, minute }
+        break
+    }
+
+    let nextDueDate: string | null = task.next_due_date
+    if (frequencyType !== 'once') {
+      nextDueDate = calculateNextDueDate(actualFrequencyType as any, frequencyConfig as any, new Date())
+    }
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        title,
+        description: description || null,
+        frequency_type: actualFrequencyType,
+        frequency_config: frequencyConfig,
+        next_due_date: nextDueDate,
+      })
+      .eq('id', task.id)
+
+    if (error) {
+      toast.error(error.message)
+    } else {
+      toast.success('Tarea actualizada')
+      onSaved()
+    }
+    setIsLoading(false)
+  }
+
+  const dayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-lg border border-primary-200 bg-primary-50/30 p-4 space-y-3">
+      <p className="text-xs font-semibold text-primary-700 uppercase">Editando tarea</p>
+      <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500" maxLength={200} />
+      <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={1000} placeholder="Descripción (opcional)" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
+
+      <select value={frequencyType} onChange={(e) => setFrequencyType(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <option value="once">Una vez</option>
+        <option value="daily">Diaria</option>
+        <option value="weekly">Semanal</option>
+        <option value="biweekly">Quincenal</option>
+        <option value="monthly">Mensual</option>
+      </select>
+
+      {/* Daily: time */}
+      {frequencyType === 'daily' && (
+        <div>
+          <label className="text-xs text-gray-600">Hora:</label>
+          <div className="mt-1 flex gap-1 items-center">
+            <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+              {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+            </select>
+            <span>:</span>
+            <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+              {[0, 15, 30, 45].map((m) => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Weekly / Biweekly: days + time */}
+      {(frequencyType === 'weekly' || frequencyType === 'biweekly') && (
+        <div className="space-y-2">
+          <label className="text-xs text-gray-600 block">Días:</label>
+          <div className="flex gap-1">
+            {dayLabels.map((label, idx) => (
+              <button key={idx} type="button" onClick={() => toggleDay(idx)} className={`rounded-full w-9 h-9 text-xs font-medium border transition-colors ${selectedDays.includes(idx) ? 'bg-primary-500 border-primary-500 text-white' : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'}`}>{label}</button>
+            ))}
+          </div>
+          <div>
+            <label className="text-xs text-gray-600">Hora:</label>
+            <div className="mt-1 flex gap-1 items-center">
+              <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+              </select>
+              <span>:</span>
+              <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                {[0, 15, 30, 45].map((m) => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly: day + time */}
+      {frequencyType === 'monthly' && (
+        <div className="space-y-2">
+          <div className="flex items-baseline gap-2">
+            <label className="text-xs text-gray-600">Día:</label>
+            <input type="number" min={1} max={31} value={dayOfMonth} onChange={(e) => setDayOfMonth(Math.max(1, Math.min(31, Number(e.target.value) || 1)))} className="w-16 rounded border border-gray-300 px-2 py-1 text-sm text-center font-bold" />
+            <span className="text-xs text-gray-600">de cada mes</span>
+          </div>
+          <div>
+            <label className="text-xs text-gray-600">Hora:</label>
+            <div className="mt-1 flex gap-1 items-center">
+              <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+              </select>
+              <span>:</span>
+              <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                {[0, 15, 30, 45].map((m) => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-1">
+        <button type="submit" disabled={isLoading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">{isLoading ? 'Guardando...' : 'Guardar Cambios'}</button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">Cancelar</button>
+      </div>
+    </form>
+  )
+}
+
+function formatFrequencyDisplay(frequencyType: string, config: Record<string, unknown> | null): string {
+  const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+  const h = config?.hour !== undefined ? String(config.hour).padStart(2, '0') : null
+  const m = config?.minute !== undefined ? String(config.minute).padStart(2, '0') : null
+  const timeStr = h !== null ? ` a las ${h}:${m ?? '00'}` : ''
+
+  switch (frequencyType) {
+    case 'once':
+      return '🔹 Una vez'
+    case 'daily':
+      return `🔄 Diaria${timeStr}`
+    case 'weekly':
+    case 'weekly_custom': {
+      const days = (config?.daysOfWeek as number[]) ?? []
+      const dayStr = days.length > 0 ? days.map((d) => dayNames[d]).join(', ') : 'Sin días'
+      return `📅 Cada semana: ${dayStr}${timeStr}`
+    }
+    case 'biweekly': {
+      const days = (config?.daysOfWeek as number[]) ?? []
+      const dayStr = days.length > 0 ? days.map((d) => dayNames[d]).join(', ') : 'Sin días'
+      return `📅 Cada 2 semanas: ${dayStr}${timeStr}`
+    }
+    case 'monthly': {
+      const dayOfMonth = config?.dayOfMonth as number | undefined
+      return `📅 Mensual: día ${dayOfMonth ?? '?'}${timeStr}`
+    }
+    case 'custom':
+      return `⚙️ Cada ${config?.intervalDays ?? '?'} días`
+    default:
+      return frequencyType
+  }
+}
+
+function AssigneeEditor({ taskId, members, currentAssignees, onSave, onCancel }: {
+  taskId: string; members: Member[]; currentAssignees: string[]; onSave: (ids: string[]) => void; onCancel: () => void
+}) {
+  const [selected, setSelected] = useState<string[]>(currentAssignees)
+
+  const toggle = (uid: string) => {
+    setSelected((prev) => prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid])
+  }
+
+  return (
+    <div className="mt-3 border-t border-gray-200 pt-3">
+      <p className="text-xs font-medium text-gray-700 mb-2">Editar asignados:</p>
+      <div className="flex flex-wrap gap-1">
+        {members.map((m) => (
+          <button key={m.user_id} type="button" onClick={() => toggle(m.user_id)} className={`rounded-full px-3 py-1 text-xs font-medium border ${selected.includes(m.user_id) ? 'bg-primary-100 border-primary-400 text-primary-700' : 'bg-gray-50 border-gray-300 text-gray-600'}`}>
+            {selected.includes(m.user_id) ? '✓ ' : ''}{m.profiles?.display_name ?? '?'}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button onClick={() => onSave(selected)} className="rounded bg-primary-600 px-3 py-1 text-xs text-white">Guardar</button>
+        <button onClick={onCancel} className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600">Cancelar</button>
       </div>
     </div>
   )
 }
 
-function CreateTaskForm({
-  homeId,
-  members,
-  onCreated,
-  onCancel,
-}: {
-  homeId: string
-  members: Member[]
-  onCreated: () => void
-  onCancel: () => void
+function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
+  homeId: string; members: Member[]; onCreated: () => void; onCancel: () => void
 }) {
   const { session } = useAuth()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [frequencyType, setFrequencyType] = useState('once')
-  const [selectedDays, setSelectedDays] = useState<number[]>([])
+  const [selectedDays, setSelectedDays] = useState<number[]>([1]) // default Monday
+  const [dayOfMonth, setDayOfMonth] = useState(1)
+  const [hour, setHour] = useState(8)
+  const [minute, setMinute] = useState(0)
+  const [dueDate, setDueDate] = useState('')
+  const [dueTime, setDueTime] = useState('')
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
+  const [rotationEnabled, setRotationEnabled] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  const toggleAssignee = (userId: string) => {
-    setSelectedAssignees((prev) =>
-      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
-    )
-  }
-
-  const toggleDay = (day: number) => {
-    setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort((a, b) => a - b)
-    )
-  }
+  const toggleAssignee = (uid: string) => setSelectedAssignees((p) => p.includes(uid) ? p.filter((id) => id !== uid) : [...p, uid])
+  const toggleDay = (day: number) => setSelectedDays((p) => p.includes(day) ? p.filter((d) => d !== day) : [...p, day].sort((a, b) => a - b))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!session) return
-    if (frequencyType === 'weekly_custom' && selectedDays.length === 0) {
+    if ((frequencyType === 'weekly' || frequencyType === 'weekly_custom' || frequencyType === 'biweekly') && selectedDays.length === 0) {
       toast.error('Selecciona al menos un día de la semana')
+      return
+    }
+    if (rotationEnabled && selectedAssignees.length < 2) {
+      toast.error('La rotación requiere al menos 2 miembros')
       return
     }
     setIsLoading(true)
 
-    const frequencyConfig = frequencyType === 'weekly_custom' ? { daysOfWeek: selectedDays } : undefined
-    const nextDueDate = frequencyType === 'once' ? null : calculateSimpleNextDue(frequencyType, frequencyConfig)
+    // Build frequency config
+    let frequencyConfig: Record<string, unknown> | null = null
+    let actualFrequencyType = frequencyType
+
+    switch (frequencyType) {
+      case 'daily':
+        frequencyConfig = { hour, minute }
+        break
+      case 'weekly':
+      case 'weekly_custom':
+        actualFrequencyType = 'weekly_custom' // use weekly_custom in DB for multi-day
+        frequencyConfig = { daysOfWeek: selectedDays, hour, minute }
+        break
+      case 'biweekly':
+        frequencyConfig = { daysOfWeek: selectedDays, hour, minute }
+        break
+      case 'monthly':
+        frequencyConfig = { dayOfMonth, hour, minute }
+        break
+    }
+
+    // Calculate next due date
+    let nextDueDate: string | null = null
+    if (frequencyType === 'once') {
+      if (dueDate) {
+        const d = new Date(dueDate)
+        if (dueTime) {
+          const [h, m] = dueTime.split(':').map(Number)
+          d.setHours(h ?? 0, m ?? 0)
+        }
+        nextDueDate = d.toISOString()
+      }
+    } else {
+      nextDueDate = calculateNextDueDate(actualFrequencyType as any, frequencyConfig as any, new Date())
+    }
 
     const { data: task, error } = await supabase
       .from('tasks')
       .insert({
-        home_id: homeId,
-        title,
-        description: description || null,
-        created_by: session.user.id,
-        frequency_type: frequencyType,
-        frequency_config: frequencyConfig ?? null,
-        next_due_date: nextDueDate,
+        home_id: homeId, title, description: description || null,
+        created_by: session.user.id, frequency_type: actualFrequencyType,
+        frequency_config: frequencyConfig, next_due_date: nextDueDate,
+        rotation_enabled: rotationEnabled,
+        rotation_members: rotationEnabled ? selectedAssignees : [],
+        rotation_index: 0,
       })
-      .select()
-      .single()
+      .select().single()
 
-    if (error) {
-      toast.error(error.message)
-      setIsLoading(false)
-      return
-    }
+    if (error) { toast.error(error.message); setIsLoading(false); return }
 
-    // Create assignments
-    if (selectedAssignees.length > 0) {
-      const assignments = selectedAssignees.map((userId) => ({
-        task_id: task.id,
-        user_id: userId,
-      }))
-      await supabase.from('task_assignments').insert(assignments)
+    const assignees = rotationEnabled ? [selectedAssignees[0]!] : selectedAssignees
+    if (assignees.length > 0) {
+      await supabase.from('task_assignments').insert(assignees.map((uid) => ({ task_id: task.id, user_id: uid })))
     }
 
     toast.success('Tarea creada')
@@ -461,134 +700,146 @@ function CreateTaskForm({
     setIsLoading(false)
   }
 
+  const dayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-      <input
-        type="text"
-        required
-        placeholder="Título de la tarea"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-        data-testid="task-form-title"
-      />
-      <textarea
-        placeholder="Descripción (opcional)"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        rows={2}
-        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-        data-testid="task-form-description"
-      />
-      <select
-        value={frequencyType}
-        onChange={(e) => setFrequencyType(e.target.value)}
-        className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
-        data-testid="task-form-frequency"
-      >
-        <option value="once">Una vez</option>
-        <option value="daily">Diaria</option>
-        <option value="weekly">Semanal</option>
-        <option value="weekly_custom">Días específicos de la semana</option>
-        <option value="biweekly">Quincenal</option>
-        <option value="monthly">Mensual</option>
-      </select>
+    <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
+      <input type="text" required placeholder="Título de la tarea" value={title} onChange={(e) => setTitle(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500" maxLength={200} data-testid="task-form-title" />
+      <textarea placeholder="Descripción (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={1000} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
 
-      {frequencyType === 'weekly_custom' && (
-        <div>
-          <p className="text-xs font-medium text-gray-700 mb-1">Selecciona los días:</p>
-          <div className="flex gap-1">
-            {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((day, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => toggleDay(idx)}
-                className={`rounded-full w-9 h-9 text-xs font-medium border ${
-                  selectedDays.includes(idx)
-                    ? 'bg-primary-100 border-primary-400 text-primary-700'
-                    : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {day}
-              </button>
-            ))}
+      {/* Frequency selector */}
+      <div className="space-y-3">
+        <select value={frequencyType} onChange={(e) => setFrequencyType(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" data-testid="task-form-frequency">
+          <option value="once">Una vez</option>
+          <option value="daily">Diaria</option>
+          <option value="weekly">Semanal</option>
+          <option value="biweekly">Quincenal</option>
+          <option value="monthly">Mensual</option>
+        </select>
+
+        {/* Once: date + time */}
+        {frequencyType === 'once' && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-gray-600">Fecha (opcional)</label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-600">Hora (opcional)</label>
+              <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Assignee selector */}
-      <div>
-        <p className="text-xs font-medium text-gray-700 mb-1">Asignar a:</p>
-        <div className="flex flex-wrap gap-2">
-          {members.map((member) => (
-            <button
-              key={member.user_id}
-              type="button"
-              onClick={() => toggleAssignee(member.user_id)}
-              className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                selectedAssignees.includes(member.user_id)
-                  ? 'bg-primary-100 border-primary-400 text-primary-700'
-                  : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {selectedAssignees.includes(member.user_id) ? '✓ ' : ''}{member.profiles?.display_name ?? 'Sin nombre'}
-            </button>
-          ))}
-        </div>
-        {selectedAssignees.length === 0 && (
-          <p className="text-xs text-gray-400 mt-1">Sin asignar — cualquier miembro podrá completarla</p>
+        {/* Daily: just time */}
+        {frequencyType === 'daily' && (
+          <div className="max-w-[200px]">
+            <label className="text-xs text-gray-600">Hora de la tarea</label>
+            <div className="mt-1 flex gap-1 items-center">
+              <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+              </select>
+              <span className="text-gray-500">:</span>
+              <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                {[0, 15, 30, 45].map((m) => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Weekly / Biweekly: days + time */}
+        {(frequencyType === 'weekly' || frequencyType === 'biweekly') && (
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">
+                {frequencyType === 'weekly' ? 'Se repite cada semana los días:' : 'Se repite cada 2 semanas los días:'}
+              </label>
+              <div className="flex gap-1">
+                {dayLabels.map((label, idx) => (
+                  <button key={idx} type="button" onClick={() => toggleDay(idx)} className={`rounded-full w-9 h-9 text-xs font-medium border transition-colors ${selectedDays.includes(idx) ? 'bg-primary-500 border-primary-500 text-white' : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'}`}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="max-w-[200px]">
+              <label className="text-xs text-gray-600">Hora</label>
+              <div className="mt-1 flex gap-1 items-center">
+                <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                  {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+                </select>
+                <span className="text-gray-500">:</span>
+                <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                  {[0, 15, 30, 45].map((m) => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Monthly: day of month + time */}
+        {frequencyType === 'monthly' && (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">Se repite cada mes el día:</label>
+              <div className="flex items-baseline gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={dayOfMonth}
+                  onChange={(e) => {
+                    const v = Math.max(1, Math.min(31, Number(e.target.value) || 1))
+                    setDayOfMonth(v)
+                  }}
+                  className="w-16 rounded-lg border border-gray-300 px-3 py-2 text-center text-lg font-bold text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+                <span className="text-sm text-gray-600">de cada mes</span>
+              </div>
+              {dayOfMonth > 28 && (
+                <p className="mt-1.5 text-xs text-amber-600">
+                  ⚡ En meses más cortos se usará el último día disponible
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-gray-600 mb-1 block">A las:</label>
+              <div className="flex gap-1 items-center">
+                <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                  {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+                </select>
+                <span className="text-gray-500 font-medium">:</span>
+                <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
+                  {[0, 15, 30, 45].map((m) => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-          data-testid="task-form-submit"
-        >
-          {isLoading ? 'Creando...' : 'Crear'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Cancelar
-        </button>
+      {/* Assignees */}
+      <div>
+        <p className="text-xs font-medium text-gray-700 mb-1">Asignar a:</p>
+        <div className="flex flex-wrap gap-2">
+          {members.map((m) => (
+            <button key={m.user_id} type="button" onClick={() => toggleAssignee(m.user_id)} className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${selectedAssignees.includes(m.user_id) ? 'bg-primary-100 border-primary-400 text-primary-700' : 'bg-gray-50 border-gray-300 text-gray-600'}`}>
+              {selectedAssignees.includes(m.user_id) ? '✓ ' : ''}{m.profiles?.display_name ?? '?'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Rotation */}
+      {selectedAssignees.length >= 2 && frequencyType !== 'once' && (
+        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+          <input type="checkbox" checked={rotationEnabled} onChange={(e) => setRotationEnabled(e.target.checked)} className="rounded border-gray-300" />
+          🔄 Rotar responsables automáticamente
+        </label>
+      )}
+
+      <div className="flex gap-2 pt-2">
+        <button type="submit" disabled={isLoading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50" data-testid="task-form-submit">{isLoading ? 'Creando...' : 'Crear Tarea'}</button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">Cancelar</button>
       </div>
     </form>
   )
-}
-
-function calculateSimpleNextDue(frequencyType: string, config?: { daysOfWeek?: number[] }): string {
-  const now = new Date()
-  switch (frequencyType) {
-    case 'daily': now.setDate(now.getDate() + 1); break
-    case 'weekly': now.setDate(now.getDate() + 7); break
-    case 'biweekly': now.setDate(now.getDate() + 14); break
-    case 'monthly': now.setDate(1); now.setMonth(now.getMonth() + 1); break
-    case 'weekly_custom': {
-      const days = config?.daysOfWeek ?? [1]
-      const currentDay = now.getDay()
-      // Find next day in list
-      const sorted = [...days].sort((a, b) => a - b)
-      let found = false
-      for (const targetDay of sorted) {
-        if (targetDay > currentDay) {
-          now.setDate(now.getDate() + (targetDay - currentDay))
-          found = true
-          break
-        }
-      }
-      if (!found) {
-        // Wrap to next week
-        const firstDay = sorted[0] ?? 1
-        now.setDate(now.getDate() + (7 - currentDay + firstDay))
-      }
-      break
-    }
-    default: now.setDate(now.getDate() + 1)
-  }
-  return now.toISOString()
 }

@@ -1,10 +1,12 @@
 export type FrequencyType = 'once' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom' | 'weekly_custom'
 
 export interface FrequencyConfig {
-  dayOfWeek?: number // 0=Sun, 1=Mon, ..., 6=Sat (for 'weekly')
-  daysOfWeek?: number[] // [1, 2] = Mon, Tue (for 'weekly_custom')
-  dayOfMonth?: number // 1-28
-  intervalDays?: number // for custom
+  dayOfWeek?: number // 0=Sun, 1=Mon, ..., 6=Sat (legacy, for single day)
+  daysOfWeek?: number[] // [1, 2] = Mon, Tue (for 'weekly' and 'biweekly')
+  dayOfMonth?: number // 1-31 (for 'monthly', clamps to last day of month if month is shorter)
+  intervalDays?: number // for 'custom'
+  hour?: number // 0-23 hour of day for the task
+  minute?: number // 0-59 minute
 }
 
 export type TaskFrequency = {
