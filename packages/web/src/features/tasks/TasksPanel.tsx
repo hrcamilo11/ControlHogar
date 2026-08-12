@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
 import { calculateNextDueDate } from '@controlhogar/shared/src/modules/tasks/task-recurrence'
+import { TaskCalendar } from './TaskCalendar'
 
 interface Task {
   id: string
@@ -41,9 +42,11 @@ type SortOption = 'date' | 'title' | 'frequency'
 
 export function TasksPanel({ homeId }: { homeId: string }) {
   const [showForm, setShowForm] = useState(false)
-  const [activeView, setActiveView] = useState<'list' | 'history'>('list')
+  const [activeView, setActiveView] = useState<'list' | 'history' | 'calendar'>('list')
   const [filterAssignee, setFilterAssignee] = useState<string>('all')
+  const [filterDate, setFilterDate] = useState<string>('all')
   const [sortBy, setSortBy] = useState<SortOption>('date')
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const { session } = useAuth()
   const queryClient = useQueryClient()
 
@@ -150,9 +153,30 @@ export function TasksPanel({ homeId }: { homeId: string }) {
 
   // Filter tasks
   const filteredTasks = tasks?.filter((task) => {
-    if (filterAssignee === 'all') return true
-    if (filterAssignee === 'unassigned') return task.task_assignments.length === 0
-    return task.task_assignments.some((a) => a.user_id === filterAssignee)
+    // Assignee filter
+    if (filterAssignee === 'all') { /* pass */ }
+    else if (filterAssignee === 'unassigned') { if (task.task_assignments.length > 0) return false }
+    else { if (!task.task_assignments.some((a) => a.user_id === filterAssignee)) return false }
+
+    // Date filter
+    if (filterDate !== 'all' && task.next_due_date) {
+      const dueDate = new Date(task.next_due_date)
+      const now = new Date()
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+      const weekEnd = new Date(now.getTime() + 7 * 86400000)
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+
+      if (filterDate === 'today' && dueDate > todayEnd) return false
+      if (filterDate === 'week' && dueDate > weekEnd) return false
+      if (filterDate === 'month' && dueDate > monthEnd) return false
+      if (filterDate === 'overdue' && dueDate >= now) return false
+    } else if (filterDate === 'overdue' && !task.next_due_date) {
+      return false
+    } else if (filterDate !== 'all' && !task.next_due_date) {
+      return filterDate !== 'overdue' // tasks without date show in all non-overdue filters
+    }
+
+    return true
   })
 
   // Sort tasks
@@ -175,9 +199,11 @@ export function TasksPanel({ homeId }: { homeId: string }) {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <button onClick={() => setActiveView('list')} className={`text-sm font-medium ${activeView === 'list' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Tareas activas</button>
+        <button onClick={() => setActiveView('calendar')} className={`text-sm font-medium ${activeView === 'calendar' ? 'text-primary-600 underline' : 'text-gray-500'}`}>📅 Calendario</button>
         <button onClick={() => setActiveView('history')} className={`text-sm font-medium ${activeView === 'history' ? 'text-primary-600 underline' : 'text-gray-500'}`}>📜 Historial</button>
       </div>
 
+      {activeView === 'calendar' && <TaskCalendar homeId={homeId} />}
       {activeView === 'history' && <TaskHistory homeId={homeId} members={members ?? []} />}
 
       {activeView === 'list' && (
@@ -192,12 +218,22 @@ export function TasksPanel({ homeId }: { homeId: string }) {
           {/* Filters + Sort */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-500">Filtrar:</span>
+              <span className="text-xs text-gray-500">Asignado:</span>
               {['all', session!.user.id, 'unassigned'].map((filter, i) => {
-                const labels = ['Todas', 'Mis tareas', 'Sin asignar']
+                const labels = ['Todas', 'Mías', 'Sin asignar']
                 return (
                   <button key={filter} onClick={() => setFilterAssignee(filter)} className={`rounded-full px-3 py-1 text-xs font-medium ${filterAssignee === filter ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}`}>
                     {labels[i]}
+                  </button>
+                )
+              })}
+              <span className="text-xs text-gray-300">|</span>
+              <span className="text-xs text-gray-500">Fecha:</span>
+              {(['all', 'today', 'week', 'month', 'overdue'] as const).map((filter) => {
+                const labels: Record<string, string> = { all: 'Todas', today: 'Hoy', week: 'Semana', month: 'Mes', overdue: 'Atrasadas' }
+                return (
+                  <button key={filter} onClick={() => setFilterDate(filter)} className={`rounded-full px-3 py-1 text-xs font-medium ${filterDate === filter ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {labels[filter]}
                   </button>
                 )
               })}
@@ -230,6 +266,9 @@ export function TasksPanel({ homeId }: { homeId: string }) {
                 currentUserRole={currentUserRole ?? 'member'}
                 onComplete={() => completeMutation.mutate(task.id)}
                 isCompleting={completeMutation.isPending && completeMutation.variables === task.id}
+                isEditing={editingTaskId === task.id}
+                onStartEdit={() => setEditingTaskId(task.id)}
+                onStopEdit={() => setEditingTaskId(null)}
               />
             ))}
           </div>
@@ -281,7 +320,7 @@ function TaskHistory({ homeId, members }: { homeId: string; members: Member[] })
               <span className="text-green-500">✓</span>
               <div>
                 <p className="text-sm font-medium text-gray-900">{(entry.tasks as any)?.title}</p>
-                <p className="text-xs text-gray-500">{(entry.profiles as any)?.display_name} · {new Date(entry.completed_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                <p className="text-xs text-gray-500">{(entry.profiles as any)?.display_name} · {new Date(entry.completed_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })}</p>
               </div>
             </div>
             {entry.was_overdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">Atrasada</span>}
@@ -293,32 +332,61 @@ function TaskHistory({ homeId, members }: { homeId: string; members: Member[] })
 }
 
 function TaskCard({
-  task, members, homeId, currentUserId, currentUserRole, onComplete, isCompleting,
+  task, members, homeId, currentUserId, currentUserRole, onComplete, isCompleting, isEditing, onStartEdit, onStopEdit,
 }: {
-  task: Task; members: Member[]; homeId: string; currentUserId: string; currentUserRole: string; onComplete: () => void; isCompleting: boolean
+  task: Task; members: Member[]; homeId: string; currentUserId: string; currentUserRole: string; onComplete: () => void; isCompleting: boolean; isEditing: boolean; onStartEdit: () => void; onStopEdit: () => void
 }) {
-  const [showEdit, setShowEdit] = useState(false)
   const [showAssignEdit, setShowAssignEdit] = useState(false)
   const queryClient = useQueryClient()
 
   const isOverdue = task.next_due_date ? new Date(task.next_due_date) < new Date() : false
   const isAssignedToMe = task.task_assignments.some((a) => a.user_id === currentUserId)
   const isGuest = currentUserRole === 'guest'
+  const isPaused = !task.next_due_date && task.frequency_type !== 'once'
   const canEdit = !isGuest && (task.created_by === currentUserId || currentUserRole === 'owner' || currentUserRole === 'admin')
-  const canComplete = isGuest ? isAssignedToMe : true
+  const canComplete = (isGuest ? isAssignedToMe : true) && !isPaused
 
   const assignedNames = task.task_assignments
     .map((a) => members.find((m) => m.user_id === a.user_id)?.profiles?.display_name)
     .filter(Boolean)
 
   const handleDelete = async () => {
-    if (!confirm('¿Eliminar esta tarea?')) return
+    if (!confirm('¿Eliminar esta tarea?\n\nEl historial de completaciones se conservará.')) return
     await supabase.from('tasks').update({ is_active: false }).eq('id', task.id)
     queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
     toast.success('Tarea eliminada')
   }
 
+  const handleTogglePause = async () => {
+    if (task.next_due_date) {
+      // Pausing
+      await supabase.from('tasks').update({ next_due_date: null }).eq('id', task.id)
+      queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
+      toast.success('Tarea pausada')
+    } else {
+      // Reactivating — calculate and show next date
+      const nextDue = calculateNextDueDate(
+        task.frequency_type as any,
+        task.frequency_config as any,
+        new Date()
+      )
+      const nextDate = nextDue ? new Date(nextDue).toLocaleString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'próxima ocurrencia'
+
+      if (!confirm(`¿Reactivar tarea?\n\nPróxima fecha: ${nextDate}`)) return
+
+      await supabase.from('tasks').update({ next_due_date: nextDue }).eq('id', task.id)
+      queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
+      toast.success('Tarea reactivada')
+    }
+  }
+
   const handleUpdateAssignees = async (userIds: string[]) => {
+    // If rotation enabled and less than 2 assignees, disable rotation
+    if (task.rotation_enabled && userIds.length < 2) {
+      await supabase.from('tasks').update({ rotation_enabled: false, rotation_members: [] }).eq('id', task.id)
+      toast('Rotación desactivada (se necesitan al menos 2 asignados)', { icon: '⚠️' })
+    }
+
     await supabase.from('task_assignments').delete().eq('task_id', task.id)
     if (userIds.length > 0) {
       await supabase.from('task_assignments').insert(userIds.map((uid) => ({ task_id: task.id, user_id: uid })))
@@ -328,14 +396,14 @@ function TaskCard({
     toast.success('Asignación actualizada')
   }
 
-  if (showEdit) {
+  if (isEditing) {
     return (
       <EditTaskForm
         task={task}
         members={members}
         homeId={homeId}
-        onSaved={() => { setShowEdit(false); queryClient.invalidateQueries({ queryKey: ['tasks', homeId] }) }}
-        onCancel={() => setShowEdit(false)}
+        onSaved={() => { onStopEdit(); queryClient.invalidateQueries({ queryKey: ['tasks', homeId] }) }}
+        onCancel={onStopEdit}
       />
     )
   }
@@ -347,6 +415,7 @@ function TaskCard({
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-gray-900">{task.title}</h3>
             {isOverdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Atrasada</span>}
+            {isPaused && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">⏸ Pausada</span>}
             {task.rotation_enabled && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">🔄 Rotación</span>}
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 flex-wrap">
@@ -360,6 +429,7 @@ function TaskCard({
             <button onClick={() => setShowAssignEdit(!showAssignEdit)} className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 hover:bg-blue-100">
               👤 {assignedNames.length > 0 ? assignedNames.join(', ') : 'Sin asignar'}
             </button>
+            {task.frequency_type !== 'once' && <CompletionCounter taskId={task.id} />}
           </div>
           {task.description && <p className="mt-1 text-sm text-gray-600">{task.description}</p>}
         </div>
@@ -367,13 +437,26 @@ function TaskCard({
         <div className="ml-4 flex items-center gap-2">
           {canEdit && (
             <>
-              <button onClick={() => setShowEdit(true)} className="text-xs text-gray-400 hover:text-gray-600" title="Editar">✏️</button>
+              <button onClick={onStartEdit} className="text-xs text-gray-400 hover:text-gray-600" title="Editar">✏️</button>
+              {task.frequency_type !== 'once' && (
+                <button onClick={handleTogglePause} className="text-xs text-gray-400 hover:text-yellow-600" title={isPaused ? 'Reactivar' : 'Pausar'}>
+                  {isPaused ? '▶️' : '⏸️'}
+                </button>
+              )}
               <button onClick={handleDelete} className="text-xs text-gray-400 hover:text-red-600" title="Eliminar">🗑️</button>
             </>
           )}
           {canComplete && (
             <button
-              onClick={onComplete}
+              onClick={() => {
+                if (isOverdue && task.next_due_date) {
+                  const hoursOverdue = Math.floor((Date.now() - new Date(task.next_due_date).getTime()) / 3600000)
+                  if (hoursOverdue > 24) {
+                    if (!confirm(`Esta tarea está atrasada por ${hoursOverdue} horas. ¿Completar de todos modos?`)) return
+                  }
+                }
+                onComplete()
+              }}
               disabled={isCompleting}
               className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-green-400 text-green-600 hover:bg-green-50 disabled:opacity-50 transition-all"
               title="Completar tarea"
@@ -390,6 +473,33 @@ function TaskCard({
         <AssigneeEditor taskId={task.id} members={members} currentAssignees={task.task_assignments.map((a) => a.user_id)} onSave={handleUpdateAssignees} onCancel={() => setShowAssignEdit(false)} />
       )}
     </div>
+  )
+}
+
+function CompletionCounter({ taskId }: { taskId: string }) {
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+  const { data: count } = useQuery({
+    queryKey: ['task-completion-count', taskId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('task_completions')
+        .select('*', { count: 'exact', head: true })
+        .eq('task_id', taskId)
+        .gte('completed_at', monthStart)
+      if (error) return 0
+      return count ?? 0
+    },
+    staleTime: 60000,
+  })
+
+  if (!count) return null
+
+  return (
+    <span className="rounded-full bg-green-50 px-2 py-0.5 text-green-700 text-xs">
+      ✓ {count}× este mes
+    </span>
   )
 }
 
@@ -410,6 +520,10 @@ function EditTaskForm({ task, members, homeId, onSaved, onCancel }: {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!title.trim()) {
+      toast.error('El título no puede estar vacío')
+      return
+    }
     if ((frequencyType === 'weekly' || frequencyType === 'biweekly') && selectedDays.length === 0) {
       toast.error('Selecciona al menos un día')
       return
@@ -630,6 +744,24 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!session) return
+
+    // Validation: title not empty/whitespace
+    if (!title.trim()) {
+      toast.error('El título no puede estar vacío')
+      return
+    }
+
+    // Validation: date not in the past for one-time tasks
+    if (frequencyType === 'once' && dueDate) {
+      const selectedDate = new Date(dueDate)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (selectedDate < today) {
+        toast.error('La fecha no puede ser en el pasado')
+        return
+      }
+    }
+
     if ((frequencyType === 'weekly' || frequencyType === 'weekly_custom' || frequencyType === 'biweekly') && selectedDays.length === 0) {
       toast.error('Selecciona al menos un día de la semana')
       return

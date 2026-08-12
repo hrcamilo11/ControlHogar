@@ -5,7 +5,7 @@ import type { FrequencyType, FrequencyConfig } from './tasks.types'
  * Called after a task is completed to set the next occurrence.
  *
  * @param frequencyType - Type of recurrence
- * @param config - Additional configuration (dayOfWeek, dayOfMonth, intervalDays)
+ * @param config - Additional configuration (dayOfWeek, dayOfMonth, intervalDays, hour, minute)
  * @param fromDate - Calculate next due from this date (defaults to now)
  * @returns Next due date as ISO string, or null for one-time tasks
  */
@@ -14,42 +14,64 @@ export function calculateNextDueDate(
   config: FrequencyConfig | null,
   fromDate: Date = new Date(),
 ): string | null {
+  let result: Date | null = null
+
   switch (frequencyType) {
     case 'once':
       return null
 
     case 'daily':
-      return addDays(fromDate, 1).toISOString()
+      result = addDays(fromDate, 1)
+      break
 
     case 'weekly': {
       const targetDay = config?.dayOfWeek ?? fromDate.getDay()
-      return getNextWeekday(fromDate, targetDay).toISOString()
+      result = getNextWeekday(fromDate, targetDay)
+      break
     }
 
     case 'biweekly': {
-      const targetDay = config?.dayOfWeek ?? fromDate.getDay()
-      const nextWeek = getNextWeekday(fromDate, targetDay)
-      return addDays(nextWeek, 7).toISOString()
+      const days = config?.daysOfWeek
+      if (days && days.length > 0) {
+        // Use custom days logic but add extra week
+        const nextDay = getNextCustomWeekday(fromDate, days)
+        result = addDays(nextDay, 7)
+      } else {
+        const targetDay = config?.dayOfWeek ?? fromDate.getDay()
+        const nextWeek = getNextWeekday(fromDate, targetDay)
+        result = addDays(nextWeek, 7)
+      }
+      break
     }
 
     case 'monthly': {
       const targetDayOfMonth = config?.dayOfMonth ?? fromDate.getDate()
-      return getNextMonthDay(fromDate, targetDayOfMonth).toISOString()
+      result = getNextMonthDay(fromDate, targetDayOfMonth)
+      break
     }
 
     case 'custom': {
       const interval = config?.intervalDays ?? 7
-      return addDays(fromDate, interval).toISOString()
+      result = addDays(fromDate, interval)
+      break
     }
 
     case 'weekly_custom': {
-      const days = config?.daysOfWeek ?? [1] // Default Monday
-      return getNextCustomWeekday(fromDate, days).toISOString()
+      const days = config?.daysOfWeek ?? [1]
+      result = getNextCustomWeekday(fromDate, days)
+      break
     }
 
     default:
       return null
   }
+
+  // Apply configured hour and minute
+  if (result && config?.hour !== undefined) {
+    result.setHours(config.hour, config.minute ?? 0, 0, 0)
+  }
+
+  return result?.toISOString() ?? null
 }
 
 /**
