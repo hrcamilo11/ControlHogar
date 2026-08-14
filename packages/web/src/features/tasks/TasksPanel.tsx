@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
 import { calculateNextDueDate } from '@controlhogar/shared/src/modules/tasks/task-recurrence'
-import { TaskCalendar } from './TaskCalendar'
 import { RotationStats, getNextFairAssignee } from './TaskRotation'
 import { SubtaskList } from './SubtaskList'
 import { Pencil, Trash2, Pause, Play, Check, Loader2 } from 'lucide-react'
@@ -45,7 +44,7 @@ type SortOption = 'date' | 'title' | 'frequency'
 
 export function TasksPanel({ homeId }: { homeId: string }) {
   const [showForm, setShowForm] = useState(false)
-  const [activeView, setActiveView] = useState<'list' | 'history' | 'calendar'>('list')
+  const [activeView, setActiveView] = useState<'list' | 'history'>('list')
   const [filterAssignee, setFilterAssignee] = useState<string>('all')
   const [filterDate, setFilterDate] = useState<string>('all')
   const [sortBy, setSortBy] = useState<SortOption>('date')
@@ -223,11 +222,9 @@ export function TasksPanel({ homeId }: { homeId: string }) {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <button onClick={() => setActiveView('list')} className={`text-sm font-medium ${activeView === 'list' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Tareas activas</button>
-        <button onClick={() => setActiveView('calendar')} className={`text-sm font-medium ${activeView === 'calendar' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Calendario</button>
         <button onClick={() => setActiveView('history')} className={`text-sm font-medium ${activeView === 'history' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Historial</button>
       </div>
 
-      {activeView === 'calendar' && <TaskCalendar homeId={homeId} />}
       {activeView === 'history' && <TaskHistory homeId={homeId} members={members ?? []} />}
 
       {activeView === 'list' && (
