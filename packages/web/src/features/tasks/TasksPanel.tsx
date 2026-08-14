@@ -407,7 +407,7 @@ function TaskCard({
     // If rotation enabled and less than 2 assignees, disable rotation
     if (task.rotation_enabled && userIds.length < 2) {
       await supabase.from('tasks').update({ rotation_enabled: false, rotation_members: [] }).eq('id', task.id)
-      toast('Rotación desactivada (se necesitan al menos 2 asignados)', { icon: '⚠️' })
+      toast('Rotación desactivada (se necesitan al menos 2 asignados)', { icon: '!' })
     }
 
     await supabase.from('task_assignments').delete().eq('task_id', task.id)
@@ -438,19 +438,19 @@ function TaskCard({
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-gray-900">{task.title}</h3>
             {isOverdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Atrasada</span>}
-            {isPaused && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">⏸ Pausada</span>}
-            {task.rotation_enabled && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">🔄 Rotación</span>}
+            {isPaused && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">Pausada</span>}
+            {task.rotation_enabled && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">Rotación</span>}
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 flex-wrap">
             <span>{formatFrequencyDisplay(task.frequency_type, task.frequency_config)}</span>
             {task.next_due_date && (
-              <span>📅 {new Date(task.next_due_date).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+              <span>{new Date(task.next_due_date).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
             )}
             {!task.next_due_date && task.frequency_type === 'once' && (
               <span className="italic text-gray-400">Sin fecha límite</span>
             )}
             <button onClick={() => setShowAssignEdit(!showAssignEdit)} className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 hover:bg-blue-100">
-              👤 {assignedNames.length > 0 ? assignedNames.join(', ') : 'Sin asignar'}
+              {assignedNames.length > 0 ? assignedNames.join(', ') : 'Sin asignar'}
             </button>
             {task.frequency_type !== 'once' && <CompletionCounter taskId={task.id} />}
           </div>
@@ -976,7 +976,7 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
               </div>
               {dayOfMonth > 28 && (
                 <p className="mt-1.5 text-xs text-amber-600">
-                  ⚡ En meses más cortos se usará el último día disponible
+                  En meses más cortos se usará el último día disponible
                 </p>
               )}
             </div>
@@ -1012,7 +1012,7 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
       {selectedAssignees.length >= 2 && frequencyType !== 'once' && (
         <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
           <input type="checkbox" checked={rotationEnabled} onChange={(e) => setRotationEnabled(e.target.checked)} className="rounded border-gray-300" />
-          🔄 Rotar responsables automáticamente
+          Rotar responsables automáticamente
         </label>
       )}
 

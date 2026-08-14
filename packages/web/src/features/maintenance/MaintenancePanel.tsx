@@ -221,9 +221,9 @@ function MaintenanceCard({ item, homeId, onStatusChange, onEdit, onDelete }: {
             <span className="rounded-full bg-gray-200 px-2 py-0.5">{statusLabels[item.status]}</span>
             <span>Creado: {new Date(item.created_at).toLocaleDateString('es-CO')}</span>
             {item.profiles?.display_name && <span>Por: {item.profiles.display_name}</span>}
-            {item.assignee?.display_name && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">👤 {item.assignee.display_name}</span>}
-            {item.estimated_date && <span>📅 Est: {new Date(item.estimated_date).toLocaleDateString('es-CO')}</span>}
-            {(item as any).task_id && (item as any).tasks?.title && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">📋 {(item as any).tasks.title}</span>}
+            {item.assignee?.display_name && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">{item.assignee.display_name}</span>}
+            {item.estimated_date && <span>Est: {new Date(item.estimated_date).toLocaleDateString('es-CO')}</span>}
+            {(item as any).task_id && (item as any).tasks?.title && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">{(item as any).tasks.title}</span>}
             {item.completed_at && <span className="text-green-600">✓ {new Date(item.completed_at).toLocaleDateString('es-CO')} por {item.completer?.display_name ?? '?'}</span>}
           </div>
           <div className="mt-2 flex items-center gap-2 text-xs">
@@ -274,7 +274,7 @@ function MaintenanceCard({ item, homeId, onStatusChange, onEdit, onDelete }: {
       {/* Photos */}
       {photos && photos.length > 0 && (
         <div className="mt-3 border-t border-gray-200 pt-3">
-          <p className="text-xs font-medium text-gray-500 mb-2">📷 Fotos ({photos.length})</p>
+          <p className="text-xs font-medium text-gray-500 mb-2">Fotos ({photos.length})</p>
           <div className="flex gap-2 flex-wrap">
             {photos.map((photo) => <PhotoThumbnail key={photo.id} photo={photo} />)}
           </div>
@@ -364,9 +364,9 @@ function MaintenanceForm({ homeId, members, editingItem, onSaved, onCancel }: {
 
       <div className="grid grid-cols-2 gap-2">
         <select value={priority} onChange={(e) => setPriority(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="high">🔴 Alta</option>
-          <option value="medium">🟡 Media</option>
-          <option value="low">🟢 Baja</option>
+          <option value="high">Alta</option>
+          <option value="medium">Media</option>
+          <option value="low">Baja</option>
         </select>
         <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
           <option value="">Sin asignar</option>
@@ -376,7 +376,7 @@ function MaintenanceForm({ homeId, members, editingItem, onSaved, onCancel }: {
 
       {/* Associate with task */}
       <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-        <option value="">📋 Sin tarea asociada</option>
+        <option value="">Sin tarea asociada</option>
         {homeTasks?.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
       </select>
 

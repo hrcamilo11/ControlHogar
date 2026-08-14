@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { Search } from 'lucide-react'
 
 interface SearchResult {
   id: string
@@ -109,13 +110,14 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
 
   return (
     <div ref={ref} className="relative w-full max-w-md">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
       <input
         type="text"
         value={query}
         onChange={(e) => { setQuery(e.target.value); setIsOpen(true) }}
         onFocus={() => setIsOpen(true)}
-        placeholder="🔍 Buscar tareas, gastos, mantenimientos..."
-        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        placeholder="Buscar tareas, gastos, mantenimientos..."
+        className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         data-testid="global-search"
       />
 
