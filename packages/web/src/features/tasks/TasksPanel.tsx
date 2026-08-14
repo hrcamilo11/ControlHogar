@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { calculateNextDueDate } from '@controlhogar/shared/src/modules/tasks/task-recurrence'
 import { TaskCalendar } from './TaskCalendar'
 import { RotationStats, getNextFairAssignee } from './TaskRotation'
+import { SubtaskList } from './SubtaskList'
 import { Pencil, Trash2, Pause, Play, Check, Loader2 } from 'lucide-react'
 
 interface Task {
@@ -455,6 +456,7 @@ function TaskCard({
             {task.frequency_type !== 'once' && <CompletionCounter taskId={task.id} />}
           </div>
           {task.description && <p className="mt-1 text-sm text-gray-600">{task.description}</p>}
+          <SubtaskList taskId={task.id} />
         </div>
 
         <div className="ml-4 flex items-center gap-1">

@@ -8,7 +8,7 @@ import { SearchBar } from '@/components/SearchBar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ListSkeleton } from '@/components/Skeleton'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings } from 'lucide-react'
+import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings, Calendar } from 'lucide-react'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
@@ -19,8 +19,9 @@ const FinancePanel = lazy(() => import('../finance/FinancePanel').then((m) => ({
 const MaintenancePanel = lazy(() => import('../maintenance/MaintenancePanel').then((m) => ({ default: m.MaintenancePanel })))
 const ActivityFeed = lazy(() => import('../activity/ActivityFeed').then((m) => ({ default: m.ActivityFeed })))
 const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
+const GlobalCalendar = lazy(() => import('./GlobalCalendar').then((m) => ({ default: m.GlobalCalendar })))
 
-type Tab = 'home' | 'tasks' | 'finance' | 'maintenance' | 'activity' | 'stats' | 'members' | 'settings'
+type Tab = 'home' | 'tasks' | 'finance' | 'maintenance' | 'calendar' | 'activity' | 'stats' | 'members' | 'settings'
 
 export function DashboardPage() {
   const { session, signOut } = useAuth()
@@ -51,6 +52,7 @@ export function DashboardPage() {
     { key: 'tasks', label: 'Tareas', icon: <ClipboardList className="h-4 w-4" /> },
     { key: 'finance', label: 'Finanzas', icon: <Wallet className="h-4 w-4" /> },
     { key: 'maintenance', label: 'Mantenim.', icon: <Wrench className="h-4 w-4" /> },
+    { key: 'calendar', label: 'Calendario', icon: <Calendar className="h-4 w-4" /> },
     { key: 'stats', label: 'Estadísticas', icon: <BarChart3 className="h-4 w-4" /> },
     { key: 'activity', label: 'Actividad', icon: <Bell className="h-4 w-4" /> },
     { key: 'members', label: 'Miembros', icon: <Users className="h-4 w-4" /> },
@@ -139,6 +141,7 @@ export function DashboardPage() {
             {activeTab === 'tasks' && <TasksPanel homeId={activeHome.id} />}
             {activeTab === 'finance' && <FinancePanel homeId={activeHome.id} />}
             {activeTab === 'maintenance' && <MaintenancePanel homeId={activeHome.id} />}
+            {activeTab === 'calendar' && <GlobalCalendar homeId={activeHome.id} />}
             {activeTab === 'stats' && <StatsPanel homeId={activeHome.id} />}
             {activeTab === 'activity' && <ActivityFeed homeId={activeHome.id} />}
             {activeTab === 'members' && <MembersPanel members={members} homeId={activeHome.id} />}
