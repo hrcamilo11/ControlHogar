@@ -77,30 +77,30 @@ export function SummaryCards({ homeId }: { homeId: string }) {
     {
       label: 'Tareas hoy',
       value: data?.tasksToday ?? 0,
-      icon: <ClipboardList className="h-6 w-6 text-blue-600" />,
-      color: 'border-blue-200 bg-blue-50',
+      icon: <ClipboardList className="h-6 w-6 text-blue-500" />,
+      color: 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-transparent',
       alert: (data?.tasksOverdue ?? 0) > 0 ? `${data?.tasksOverdue} atrasadas` : undefined,
       alertColor: 'text-red-600',
     },
     {
       label: 'Gasto del mes',
       value: `$${(data?.monthExpenses ?? 0).toLocaleString('es-CO')}`,
-      icon: <Wallet className="h-6 w-6 text-green-600" />,
-      color: 'border-green-200 bg-green-50',
+      icon: <Wallet className="h-6 w-6 text-green-500" />,
+      color: 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-transparent',
     },
     {
       label: 'Mantenimientos',
       value: data?.maintenancePending ?? 0,
-      icon: <Wrench className="h-6 w-6 text-orange-600" />,
-      color: 'border-orange-200 bg-orange-50',
+      icon: <Wrench className="h-6 w-6 text-orange-500" />,
+      color: 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-transparent',
       alert: (data?.maintenancePending ?? 0) > 3 ? 'Acumulados' : undefined,
       alertColor: 'text-orange-600',
     },
     {
       label: 'Tareas atrasadas',
       value: data?.tasksOverdue ?? 0,
-      icon: <AlertTriangle className="h-6 w-6 text-red-600" />,
-      color: (data?.tasksOverdue ?? 0) > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50',
+      icon: <AlertTriangle className="h-6 w-6 text-red-500" />,
+      color: (data?.tasksOverdue ?? 0) > 0 ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-transparent' : 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-transparent',
     },
   ]
 
