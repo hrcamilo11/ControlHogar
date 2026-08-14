@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
+import { Pencil, Trash2, MessageCircle, Camera, Play, Check } from 'lucide-react'
 
 interface Maintenance {
   id: string
@@ -153,7 +154,7 @@ function MaintenanceCard({ item, homeId, onStatusChange, onEdit, onDelete }: {
   const priorityLabels = { high: '🔴 Alta', medium: '🟡 Media', low: '🟢 Baja' }
   const statusLabels = { pending: 'Pendiente', in_progress: 'En progreso', completed: 'Completado' }
   const nextStatus: Record<string, string> = { pending: 'in_progress', in_progress: 'completed' }
-  const nextStatusLabel: Record<string, string> = { pending: '▶ Iniciar', in_progress: '✓ Completar' }
+  const nextStatusLabel: Record<string, string> = { pending: 'Iniciar', in_progress: 'Completar' }
 
   const canModify = item.created_by === session?.user.id
 
@@ -223,15 +224,30 @@ function MaintenanceCard({ item, homeId, onStatusChange, onEdit, onDelete }: {
             {item.completed_at && <span className="text-green-600">✓ {new Date(item.completed_at).toLocaleDateString('es-CO')} por {item.completer?.display_name ?? '?'}</span>}
           </div>
           <div className="mt-2 flex items-center gap-2 text-xs">
-            <button onClick={() => setShowNotes(!showNotes)} className="text-primary-600 hover:text-primary-800 font-medium">💬 Notas</button>
-            <button onClick={handleAddPhoto} className="text-primary-600 hover:text-primary-800 font-medium">📷 Foto</button>
-            {canModify && <button onClick={onEdit} className="text-gray-400 hover:text-gray-600">✏️ Editar</button>}
-            {canModify && <button onClick={onDelete} className="text-gray-400 hover:text-red-600">🗑️ Eliminar</button>}
+            <button onClick={() => setShowNotes(!showNotes)} className="flex items-center gap-1 rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-primary-600 transition-colors">
+              <MessageCircle className="h-3.5 w-3.5" /> Notas
+            </button>
+            <button onClick={handleAddPhoto} className="flex items-center gap-1 rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-primary-600 transition-colors">
+              <Camera className="h-3.5 w-3.5" /> Foto
+            </button>
+            {canModify && (
+              <>
+                <button onClick={onEdit} className="flex items-center gap-1 rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-100 hover:text-primary-600 transition-colors">
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </button>
+                <button onClick={onDelete} className="flex items-center gap-1 rounded-lg px-2 py-1 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                </button>
+              </>
+            )}
           </div>
         </div>
 
         {nextStatus[item.status] && (
-          <button onClick={() => onStatusChange(nextStatus[item.status]!)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">{nextStatusLabel[item.status]}</button>
+          <button onClick={() => onStatusChange(nextStatus[item.status]!)} className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${item.status === 'pending' ? 'border-blue-300 text-blue-700 hover:bg-blue-50' : 'border-green-300 text-green-700 hover:bg-green-50'}`}>
+            {item.status === 'pending' ? <Play className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+            {nextStatusLabel[item.status]}
+          </button>
         )}
       </div>
 

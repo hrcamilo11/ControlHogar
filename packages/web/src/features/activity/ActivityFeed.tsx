@@ -40,7 +40,7 @@ export function ActivityFeed({ homeId }: { homeId: string }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-gray-900">📢 Actividad Reciente</h2>
+      <h2 className="text-lg font-semibold text-gray-900">Actividad Reciente</h2>
       <div className="space-y-1">
         {entries.map((entry) => (
           <ActivityItem key={entry.id} entry={entry} />
@@ -105,18 +105,18 @@ function formatActivityMessage(
 
 function getActivityIcon(action: string, entityType: string): string {
   const icons: Record<string, string> = {
-    'member.joined': '👋',
-    'member.removed': '👤',
-    'task.completed': '✅',
-    'task.created': '📋',
-    'expense.created': '💰',
-    'maintenance.pending': '🔧',
-    'maintenance.in_progress': '⚙️',
-    'maintenance.completed': '✅',
-    'home.created': '🏠',
+    'member.joined': '●',
+    'member.removed': '●',
+    'task.completed': '●',
+    'task.created': '●',
+    'expense.created': '●',
+    'maintenance.pending': '●',
+    'maintenance.in_progress': '●',
+    'maintenance.completed': '●',
+    'home.created': '●',
   }
 
-  return icons[`${entityType}.${action}`] ?? '📌'
+  return icons[`${entityType}.${action}`] ?? '●'
 }
 
 function getRelativeTime(dateStr: string): string {

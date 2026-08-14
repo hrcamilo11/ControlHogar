@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { ShoppingList } from './ShoppingList'
 import { RecurringPayments } from './RecurringPayments'
 import { BudgetPanel } from './BudgetPanel'
+import { Pencil, Trash2, Paperclip, Banknote } from 'lucide-react'
 
 interface Expense {
   id: string
@@ -43,7 +44,7 @@ export function FinancePanel({ homeId }: { homeId: string }) {
     <div className="space-y-4">
       <div className="flex items-center gap-4 flex-wrap">
         {(['expenses', 'balance', 'recurring', 'budget', 'shopping'] as const).map((view) => {
-          const labels = { expenses: 'Gastos', balance: 'Balance', recurring: '📅 Recurrentes', budget: '📊 Presupuesto', shopping: '🛒 Compras' }
+          const labels = { expenses: 'Gastos', balance: 'Balance', recurring: 'Recurrentes', budget: 'Presupuesto', shopping: 'Compras' }
           return (
             <button key={view} onClick={() => setActiveView(view)} className={`text-sm font-medium ${activeView === view ? 'text-primary-600 underline' : 'text-gray-500'}`}>
               {labels[view]}
@@ -195,7 +196,9 @@ function ExpenseCard({ expense, homeId, onEdit }: { expense: Expense; homeId: st
             <span>{new Date(expense.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
             <span className="capitalize">{expense.split_type === 'equal' ? 'Equitativo' : expense.split_type === 'percentage' ? 'Por %' : expense.split_type === 'fixed' ? 'Montos fijos' : ''}</span>
             {expense.receipt_url && (
-              <button onClick={() => setShowReceipt(!showReceipt)} className="text-primary-600 hover:text-primary-800 font-medium">📎 Recibo</button>
+              <button onClick={() => setShowReceipt(!showReceipt)} className="flex items-center gap-1 text-primary-600 hover:text-primary-800 font-medium">
+                <Paperclip className="h-3 w-3" /> Recibo
+              </button>
             )}
             {expense.tasks?.title && (
               <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">📋 {expense.tasks.title}</span>
@@ -207,8 +210,12 @@ function ExpenseCard({ expense, homeId, onEdit }: { expense: Expense; homeId: st
           <span className="text-lg font-semibold text-gray-900">${Number(expense.amount).toLocaleString('es-CO')}</span>
           {canModify && (
             <>
-              <button onClick={onEdit} className="text-xs text-gray-400 hover:text-gray-600" title="Editar">✏️</button>
-              <button onClick={handleDelete} className="text-xs text-gray-400 hover:text-red-600" title="Eliminar">🗑️</button>
+              <button onClick={onEdit} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-primary-600 transition-colors" title="Editar">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={handleDelete} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors" title="Eliminar">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </>
           )}
         </div>
@@ -573,7 +580,9 @@ function BalanceView({ homeId }: { homeId: string }) {
                   <div key={debt.toUserId} className="flex items-center justify-between text-xs">
                     <span className="text-red-600">Debe ${debt.amount.toLocaleString('es-CO')} a {debt.toName}</span>
                     {member.userId === session?.user.id && (
-                      <button onClick={() => handleSettle(member.userId, debt.toUserId, debt.amount, debt.toName)} className="rounded border border-green-400 px-2 py-0.5 text-green-700 hover:bg-green-50">💸 Saldar</button>
+                      <button onClick={() => handleSettle(member.userId, debt.toUserId, debt.amount, debt.toName)} className="flex items-center gap-1 rounded border border-green-400 px-2 py-0.5 text-green-700 hover:bg-green-50 transition-colors">
+                        <Banknote className="h-3 w-3" /> Saldar
+                      </button>
                     )}
                   </div>
                 ))}

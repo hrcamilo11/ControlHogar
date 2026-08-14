@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react'
+import { useState, lazy, Suspense, type ReactNode } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { useHomes, useHomeMembers } from '../homes/useHomes'
 import { CreateHomePage } from '../homes/CreateHomePage'
@@ -8,6 +8,7 @@ import { SearchBar } from '@/components/SearchBar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ListSkeleton } from '@/components/Skeleton'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
+import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy } from 'lucide-react'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
@@ -44,14 +45,14 @@ export function DashboardPage() {
     return <CreateHomePage onCreated={() => queryClient.invalidateQueries({ queryKey: ['homes'] })} />
   }
 
-  const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'home', label: 'Inicio', icon: '🏠' },
-    { key: 'tasks', label: 'Tareas', icon: '📋' },
-    { key: 'finance', label: 'Finanzas', icon: '💰' },
-    { key: 'maintenance', label: 'Mantenim.', icon: '🔧' },
-    { key: 'stats', label: 'Estadísticas', icon: '📊' },
-    { key: 'activity', label: 'Actividad', icon: '📢' },
-    { key: 'members', label: 'Miembros', icon: '👥' },
+  const tabs: { key: Tab; label: string; icon: ReactNode }[] = [
+    { key: 'home', label: 'Inicio', icon: <Home className="h-4 w-4" /> },
+    { key: 'tasks', label: 'Tareas', icon: <ClipboardList className="h-4 w-4" /> },
+    { key: 'finance', label: 'Finanzas', icon: <Wallet className="h-4 w-4" /> },
+    { key: 'maintenance', label: 'Mantenim.', icon: <Wrench className="h-4 w-4" /> },
+    { key: 'stats', label: 'Estadísticas', icon: <BarChart3 className="h-4 w-4" /> },
+    { key: 'activity', label: 'Actividad', icon: <Bell className="h-4 w-4" /> },
+    { key: 'members', label: 'Miembros', icon: <Users className="h-4 w-4" /> },
   ]
 
   return (
@@ -68,11 +69,11 @@ export function DashboardPage() {
                 data-testid="home-selector"
               >
                 {homes.map((home, idx) => (
-                  <option key={home.id} value={idx}>🏠 {home.name}</option>
+                  <option key={home.id} value={idx}>{home.name}</option>
                 ))}
               </select>
             ) : (
-              <h1 className="text-lg font-bold text-gray-900">🏠 {activeHome.name}</h1>
+              <h1 className="flex items-center gap-2 text-lg font-bold text-gray-900"><Home className="h-5 w-5 text-primary-600" /> {activeHome.name}</h1>
             )}
           </div>
 
@@ -85,10 +86,11 @@ export function DashboardPage() {
             <span className="text-sm text-gray-600 hidden lg:inline">{session?.user.email}</span>
             <button
               onClick={signOut}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               data-testid="dashboard-signout-button"
             >
-              Salir
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Salir</span>
             </button>
           </div>
         </div>
@@ -114,7 +116,7 @@ export function DashboardPage() {
                 }`}
                 data-testid={`tab-${tab.key}`}
               >
-                <span className="mr-1">{tab.icon}</span>
+                <span className="mr-1.5 inline-flex">{tab.icon}</span>
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
@@ -231,10 +233,10 @@ function MembersPanel({ members, homeId }: { members: unknown[] | undefined; hom
         {canManage && (
           <button
             onClick={() => setShowInvite(!showInvite)}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+            className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
             data-testid="invite-member-button"
           >
-            + Invitar
+            <UserPlus className="h-4 w-4" /> Invitar
           </button>
         )}
       </div>
