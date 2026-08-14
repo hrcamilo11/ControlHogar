@@ -8,7 +8,7 @@ import { SearchBar } from '@/components/SearchBar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ListSkeleton } from '@/components/Skeleton'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy } from 'lucide-react'
+import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings } from 'lucide-react'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
@@ -18,8 +18,9 @@ const TasksPanel = lazy(() => import('../tasks/TasksPanel').then((m) => ({ defau
 const FinancePanel = lazy(() => import('../finance/FinancePanel').then((m) => ({ default: m.FinancePanel })))
 const MaintenancePanel = lazy(() => import('../maintenance/MaintenancePanel').then((m) => ({ default: m.MaintenancePanel })))
 const ActivityFeed = lazy(() => import('../activity/ActivityFeed').then((m) => ({ default: m.ActivityFeed })))
+const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
 
-type Tab = 'home' | 'tasks' | 'finance' | 'maintenance' | 'activity' | 'stats' | 'members'
+type Tab = 'home' | 'tasks' | 'finance' | 'maintenance' | 'activity' | 'stats' | 'members' | 'settings'
 
 export function DashboardPage() {
   const { session, signOut } = useAuth()
@@ -53,12 +54,13 @@ export function DashboardPage() {
     { key: 'stats', label: 'Estadísticas', icon: <BarChart3 className="h-4 w-4" /> },
     { key: 'activity', label: 'Actividad', icon: <Bell className="h-4 w-4" /> },
     { key: 'members', label: 'Miembros', icon: <Users className="h-4 w-4" /> },
+    { key: 'settings', label: 'Config', icon: <Settings className="h-4 w-4" /> },
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white shadow-sm">
+      <header className="border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             {homes && homes.length > 1 ? (
@@ -73,7 +75,7 @@ export function DashboardPage() {
                 ))}
               </select>
             ) : (
-              <h1 className="flex items-center gap-2 text-lg font-bold text-gray-900"><Home className="h-5 w-5 text-primary-600" /> {activeHome.name}</h1>
+              <h1 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-gray-100"><Home className="h-5 w-5 text-primary-600" /> {activeHome.name}</h1>
             )}
           </div>
 
@@ -102,7 +104,7 @@ export function DashboardPage() {
       </header>
 
       {/* Tabs - scrollable on mobile */}
-      <nav className="border-b border-gray-200 bg-white overflow-x-auto">
+      <nav className="border-b border-gray-200 bg-white overflow-x-auto dark:border-gray-700 dark:bg-gray-800">
         <div className="mx-auto max-w-7xl px-4">
           <div className="flex space-x-1 min-w-max">
             {tabs.map((tab) => (
@@ -111,8 +113,8 @@ export function DashboardPage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.key
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
                 data-testid={`tab-${tab.key}`}
               >
@@ -140,6 +142,7 @@ export function DashboardPage() {
             {activeTab === 'stats' && <StatsPanel homeId={activeHome.id} />}
             {activeTab === 'activity' && <ActivityFeed homeId={activeHome.id} />}
             {activeTab === 'members' && <MembersPanel members={members} homeId={activeHome.id} />}
+            {activeTab === 'settings' && <SettingsPanel />}
           </Suspense>
         </ErrorBoundary>
       </main>

@@ -8,6 +8,12 @@ import { AuthProvider } from './features/auth/AuthProvider'
 import { ConnectionIndicator } from './components/ConnectionIndicator'
 import './index.css'
 
+// Apply saved theme on load
+const savedTheme = localStorage.getItem('theme') ?? 'system'
+if (savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+  document.documentElement.classList.add('dark')
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
