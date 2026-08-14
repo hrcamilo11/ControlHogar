@@ -465,6 +465,7 @@ function TaskCard({
                 onClick={onStartEdit}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-primary-600 transition-colors"
                 title="Editar tarea"
+                aria-label="Editar tarea"
               >
                 <Pencil className="h-4 w-4" />
               </button>
@@ -473,6 +474,7 @@ function TaskCard({
                   onClick={handleTogglePause}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${isPaused ? 'text-green-500 hover:bg-green-50 hover:text-green-600' : 'text-gray-400 hover:bg-yellow-50 hover:text-yellow-600'}`}
                   title={isPaused ? 'Reactivar tarea' : 'Pausar tarea'}
+                  aria-label={isPaused ? 'Reactivar tarea' : 'Pausar tarea'}
                 >
                   {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
                 </button>
@@ -481,6 +483,7 @@ function TaskCard({
                 onClick={handleDelete}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                 title="Eliminar tarea"
+                aria-label="Eliminar tarea"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

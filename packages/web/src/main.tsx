@@ -20,13 +20,14 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30 * 1000,
-      retry: 3,
-      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000),
-      gcTime: 1000 * 60 * 60, // Keep cache for 1 hour
-      networkMode: 'offlineFirst', // Use cache first, fetch in background
+      gcTime: 10 * 60 * 1000, // Keep unused data for 10 min
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+      refetchOnWindowFocus: false, // Don't refetch on tab switch (realtime handles updates)
+      networkMode: 'offlineFirst',
     },
     mutations: {
-      networkMode: 'offlineFirst', // Queue mutations when offline
+      networkMode: 'offlineFirst',
     },
   },
 })

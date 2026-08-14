@@ -7,6 +7,16 @@
     @apply bg-gray-50 text-gray-900 antialiased dark:bg-gray-900 dark:text-gray-100;
   }
 
+  /* Smooth content transitions */
+  main > * {
+    animation: fadeSlideIn 0.2s ease-out;
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   /* Dark mode overrides for common patterns */
   .dark .bg-white {
     @apply !bg-gray-800;

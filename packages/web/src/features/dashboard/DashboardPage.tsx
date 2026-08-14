@@ -6,6 +6,7 @@ import { SummaryCards } from './SummaryCards'
 import { StatsPanel } from './StatsPanel'
 import { SearchBar } from '@/components/SearchBar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { SkipToContent } from '@/components/AccessibilityHelpers'
 import { ListSkeleton } from '@/components/Skeleton'
 import { NotificationBadge } from '../notifications/NotificationsPanel'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
@@ -63,8 +64,9 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <SkipToContent />
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <header className="border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800" role="banner">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             {homes && homes.length > 1 ? (
@@ -108,7 +110,7 @@ export function DashboardPage() {
       </header>
 
       {/* Tabs - scrollable on mobile */}
-      <nav className="border-b border-gray-200 bg-white overflow-x-auto dark:border-gray-700 dark:bg-gray-800">
+      <nav className="border-b border-gray-200 bg-white overflow-x-auto dark:border-gray-700 dark:bg-gray-800" role="navigation" aria-label="Navegación principal">
         <div className="mx-auto max-w-7xl px-4">
           <div className="flex space-x-1 min-w-max">
             {tabs.map((tab) => (
@@ -134,7 +136,7 @@ export function DashboardPage() {
       </nav>
 
       {/* Content */}
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main id="main-content" className="mx-auto max-w-7xl px-4 py-6" role="main">
         <ErrorBoundary name={activeTab}>
           <Suspense fallback={<ListSkeleton count={4} />}>
             {activeTab === 'home' && (
