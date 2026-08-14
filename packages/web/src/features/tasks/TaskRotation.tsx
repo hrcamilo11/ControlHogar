@@ -68,8 +68,8 @@ export function RotationStats({ taskId, rotationMembers, currentAssignees, homeI
   return (
     <div className="mt-2 rounded-lg bg-purple-50 border border-purple-200 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-purple-700">🔄 Rotación equitativa</p>
-        {isUnbalanced && <span className="text-xs text-amber-600">⚠️ Desbalanceada</span>}
+        <p className="text-xs font-medium text-purple-700">Rotación equitativa</p>
+        {isUnbalanced && <span className="text-xs text-amber-600">Desbalanceada</span>}
       </div>
       <div className="space-y-1">
         {stats.map((s) => (

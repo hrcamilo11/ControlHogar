@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import toast from 'react-hot-toast'
+import { CreditCard, Trash2 } from 'lucide-react'
 
 interface RecurringPayment {
   id: string
@@ -148,16 +149,16 @@ export function RecurringPayments({ homeId }: { homeId: string }) {
                 <button
                   onClick={() => markPaidMutation.mutate(payment)}
                   disabled={markPaidMutation.isPending}
-                  className="rounded-lg border border-green-400 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                  className="flex items-center gap-1 rounded-lg border border-green-400 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-colors"
                   title="Marcar como pagado este mes"
                 >
-                  💳 Pagado
+                  <CreditCard className="h-3.5 w-3.5" /> Pagado
                 </button>
                 <button
                   onClick={() => { if (confirm('¿Eliminar este pago recurrente?')) deleteMutation.mutate(payment.id) }}
-                  className="text-xs text-gray-400 hover:text-red-600"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                 >
-                  🗑️
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>

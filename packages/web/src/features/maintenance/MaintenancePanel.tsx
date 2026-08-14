@@ -151,7 +151,7 @@ function MaintenanceCard({ item, homeId, onStatusChange, onEdit, onDelete }: {
   const { session } = useAuth()
 
   const priorityColors = { high: 'border-l-red-500 bg-red-50', medium: 'border-l-yellow-500 bg-yellow-50', low: 'border-l-green-500 bg-green-50' }
-  const priorityLabels = { high: '🔴 Alta', medium: '🟡 Media', low: '🟢 Baja' }
+  const priorityLabels = { high: 'Alta', medium: 'Media', low: 'Baja' }
   const statusLabels = { pending: 'Pendiente', in_progress: 'En progreso', completed: 'Completado' }
   const nextStatus: Record<string, string> = { pending: 'in_progress', in_progress: 'completed' }
   const nextStatusLabel: Record<string, string> = { pending: 'Iniciar', in_progress: 'Completar' }
@@ -214,7 +214,10 @@ function MaintenanceCard({ item, homeId, onStatusChange, onEdit, onDelete }: {
           </div>
           {item.description && <p className="mt-1 text-sm text-gray-600">{item.description}</p>}
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-500 flex-wrap">
-            <span>{priorityLabels[item.priority]}</span>
+            <span className="flex items-center gap-1">
+              <span className={`h-2 w-2 rounded-full ${item.priority === 'high' ? 'bg-red-500' : item.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}`} />
+              {priorityLabels[item.priority]}
+            </span>
             <span className="rounded-full bg-gray-200 px-2 py-0.5">{statusLabels[item.status]}</span>
             <span>Creado: {new Date(item.created_at).toLocaleDateString('es-CO')}</span>
             {item.profiles?.display_name && <span>Por: {item.profiles.display_name}</span>}

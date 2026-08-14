@@ -55,7 +55,7 @@ export function StatsPanel({ homeId }: { homeId: string }) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-gray-900">📊 Estadísticas — {monthNames[now.getMonth()]} {now.getFullYear()}</h2>
+      <h2 className="text-lg font-semibold text-gray-900">Estadísticas — {monthNames[now.getMonth()]} {now.getFullYear()}</h2>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Expenses by category */}

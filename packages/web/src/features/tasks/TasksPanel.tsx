@@ -222,8 +222,8 @@ export function TasksPanel({ homeId }: { homeId: string }) {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <button onClick={() => setActiveView('list')} className={`text-sm font-medium ${activeView === 'list' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Tareas activas</button>
-        <button onClick={() => setActiveView('calendar')} className={`text-sm font-medium ${activeView === 'calendar' ? 'text-primary-600 underline' : 'text-gray-500'}`}>📅 Calendario</button>
-        <button onClick={() => setActiveView('history')} className={`text-sm font-medium ${activeView === 'history' ? 'text-primary-600 underline' : 'text-gray-500'}`}>📜 Historial</button>
+        <button onClick={() => setActiveView('calendar')} className={`text-sm font-medium ${activeView === 'calendar' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Calendario</button>
+        <button onClick={() => setActiveView('history')} className={`text-sm font-medium ${activeView === 'history' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Historial</button>
       </div>
 
       {activeView === 'calendar' && <TaskCalendar homeId={homeId} />}

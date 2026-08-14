@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
+import { Home } from 'lucide-react'
 
 export function CreateHomePage({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState('')
@@ -34,7 +35,7 @@ export function CreateHomePage({ onCreated }: { onCreated: () => void }) {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="text-5xl">🏠</div>
+          <div className="flex justify-center"><Home className="h-12 w-12 text-primary-500" /></div>
           <h1 className="mt-4 text-2xl font-bold text-gray-900">Crea tu Hogar</h1>
           <p className="mt-2 text-gray-600">
             Un hogar es el espacio donde gestionarás tareas, gastos y mantenimientos con tu grupo.

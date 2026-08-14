@@ -101,7 +101,7 @@ export function BudgetPanel({ homeId }: { homeId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">
-          📊 Presupuesto — {monthNames[currentMonth - 1]} {currentYear}
+          Presupuesto — {monthNames[currentMonth - 1]} {currentYear}
         </h3>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -149,8 +149,8 @@ export function BudgetPanel({ homeId }: { homeId: string }) {
               </div>
               <p className="mt-1 text-xs text-gray-500">
                 {percentage}% usado
-                {isOver && ' ⚠️ Presupuesto excedido'}
-                {isWarning && ' ⚡ Cerca del límite'}
+                {isOver && ' — Presupuesto excedido'}
+                {isWarning && ' — Cerca del límite'}
               </p>
             </div>
           )

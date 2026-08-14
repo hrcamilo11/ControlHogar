@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
+import { X, Check } from 'lucide-react'
 
 interface ShoppingItem {
   id: string
@@ -84,7 +85,7 @@ export function ShoppingList({ homeId }: { homeId: string }) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-900">🛒 Lista de Compras</h3>
+      <h3 className="text-lg font-semibold text-gray-900">Lista de Compras</h3>
 
       {/* Add item form */}
       <form onSubmit={handleAdd} className="flex gap-2">

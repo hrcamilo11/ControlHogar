@@ -53,12 +53,12 @@ export function ActivityFeed({ homeId }: { homeId: string }) {
 function ActivityItem({ entry }: { entry: ActivityEntry }) {
   const displayName = entry.profiles?.display_name ?? 'Alguien'
   const message = formatActivityMessage(entry.action, entry.entity_type, entry.metadata)
-  const icon = getActivityIcon(entry.action, entry.entity_type)
+  const color = getActivityColor(entry.action, entry.entity_type)
   const timeAgo = getRelativeTime(entry.created_at)
 
   return (
     <div className="flex items-start gap-3 rounded-lg border border-gray-100 bg-white px-4 py-3">
-      <span className="text-lg">{icon}</span>
+      <div className={`mt-0.5 h-2.5 w-2.5 rounded-full flex-shrink-0 ${color}`} />
       <div className="flex-1 min-w-0">
         <p className="text-sm text-gray-900">
           <span className="font-medium">{displayName}</span>{' '}
@@ -103,20 +103,20 @@ function formatActivityMessage(
   return messages[entityType]?.[action] ?? `realizó acción "${action}" en ${entityType}`
 }
 
-function getActivityIcon(action: string, entityType: string): string {
-  const icons: Record<string, string> = {
-    'member.joined': '●',
-    'member.removed': '●',
-    'task.completed': '●',
-    'task.created': '●',
-    'expense.created': '●',
-    'maintenance.pending': '●',
-    'maintenance.in_progress': '●',
-    'maintenance.completed': '●',
-    'home.created': '●',
+function getActivityColor(action: string, entityType: string): string {
+  const colors: Record<string, string> = {
+    'member.joined': 'bg-blue-500',
+    'member.removed': 'bg-gray-500',
+    'task.completed': 'bg-green-500',
+    'task.created': 'bg-blue-500',
+    'expense.created': 'bg-emerald-500',
+    'maintenance.pending': 'bg-orange-500',
+    'maintenance.in_progress': 'bg-yellow-500',
+    'maintenance.completed': 'bg-green-500',
+    'home.created': 'bg-purple-500',
   }
 
-  return icons[`${entityType}.${action}`] ?? '●'
+  return colors[`${entityType}.${action}`] ?? 'bg-gray-400'
 }
 
 function getRelativeTime(dateStr: string): string {

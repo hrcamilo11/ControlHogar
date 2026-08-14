@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
 import toast from 'react-hot-toast'
+import { Home, XCircle, PartyPopper } from 'lucide-react'
 
 export function AcceptInvitePage() {
   const { token } = useParams<{ token: string }>()
@@ -118,7 +119,7 @@ export function AcceptInvitePage() {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-md space-y-6 text-center">
-          <div className="text-5xl">❌</div>
+          <div className="flex justify-center"><XCircle className="h-12 w-12 text-red-400" /></div>
           <h1 className="text-2xl font-bold text-gray-900">Invitación inválida</h1>
           <p className="text-gray-600">{errorMessage}</p>
           <a href="/" className="inline-block text-sm font-medium text-primary-600 hover:text-primary-500">
@@ -133,7 +134,7 @@ export function AcceptInvitePage() {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-md space-y-6 text-center">
-          <div className="text-5xl">🎉</div>
+          <div className="flex justify-center"><PartyPopper className="h-12 w-12 text-green-500" /></div>
           <h1 className="text-2xl font-bold text-gray-900">¡Te has unido!</h1>
           <p className="text-gray-600">Redirigiendo al hogar...</p>
         </div>
@@ -144,7 +145,7 @@ export function AcceptInvitePage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md space-y-6 text-center">
-        <div className="text-5xl">🏠</div>
+        <div className="flex justify-center"><Home className="h-12 w-12 text-primary-500" /></div>
         <h1 className="text-2xl font-bold text-gray-900">Te han invitado a un hogar</h1>
         <div className="rounded-lg border border-gray-200 bg-white p-4 text-left">
           <p className="text-sm text-gray-500">Hogar</p>

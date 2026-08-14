@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { ClipboardList, Wallet, Wrench, AlertTriangle } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 interface SummaryData {
   tasksToday: number
@@ -71,11 +73,11 @@ export function SummaryCards({ homeId }: { homeId: string }) {
     )
   }
 
-  const cards = [
+  const cards: { label: string; value: number | string; icon: ReactNode; color: string; alert?: string; alertColor?: string }[] = [
     {
       label: 'Tareas hoy',
       value: data?.tasksToday ?? 0,
-      icon: '📋',
+      icon: <ClipboardList className="h-6 w-6 text-blue-600" />,
       color: 'border-blue-200 bg-blue-50',
       alert: (data?.tasksOverdue ?? 0) > 0 ? `${data?.tasksOverdue} atrasadas` : undefined,
       alertColor: 'text-red-600',
@@ -83,13 +85,13 @@ export function SummaryCards({ homeId }: { homeId: string }) {
     {
       label: 'Gasto del mes',
       value: `$${(data?.monthExpenses ?? 0).toLocaleString('es-CO')}`,
-      icon: '💰',
+      icon: <Wallet className="h-6 w-6 text-green-600" />,
       color: 'border-green-200 bg-green-50',
     },
     {
       label: 'Mantenimientos',
       value: data?.maintenancePending ?? 0,
-      icon: '🔧',
+      icon: <Wrench className="h-6 w-6 text-orange-600" />,
       color: 'border-orange-200 bg-orange-50',
       alert: (data?.maintenancePending ?? 0) > 3 ? 'Acumulados' : undefined,
       alertColor: 'text-orange-600',
@@ -97,7 +99,7 @@ export function SummaryCards({ homeId }: { homeId: string }) {
     {
       label: 'Tareas atrasadas',
       value: data?.tasksOverdue ?? 0,
-      icon: '⚠️',
+      icon: <AlertTriangle className="h-6 w-6 text-red-600" />,
       color: (data?.tasksOverdue ?? 0) > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50',
     },
   ]

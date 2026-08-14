@@ -39,7 +39,7 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
           type: 'task',
           title: t.title,
           subtitle: t.frequency_type,
-          icon: '📋',
+          icon: 'tasks',
         })
       })
 
@@ -57,7 +57,7 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
           type: 'expense',
           title: e.title,
           subtitle: `$${Number(e.amount).toLocaleString('es-CO')}`,
-          icon: '💰',
+          icon: 'expense',
         })
       })
 
@@ -75,7 +75,7 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
           type: 'maintenance',
           title: m.title,
           subtitle: m.status,
-          icon: '🔧',
+          icon: 'maintenance',
         })
       })
 
@@ -127,7 +127,7 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
               onClick={() => handleSelect(result)}
               className="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg"
             >
-              <span className="text-lg">{result.icon}</span>
+              <div className={`h-3 w-3 rounded-full flex-shrink-0 ${result.icon === 'tasks' ? 'bg-blue-500' : result.icon === 'expense' ? 'bg-green-500' : 'bg-orange-500'}`} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-gray-900">{result.title}</p>
                 <p className="text-xs text-gray-500">{result.subtitle}</p>

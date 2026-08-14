@@ -201,7 +201,7 @@ function ExpenseCard({ expense, homeId, onEdit }: { expense: Expense; homeId: st
               </button>
             )}
             {expense.tasks?.title && (
-              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">📋 {expense.tasks.title}</span>
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">{expense.tasks.title}</span>
             )}
           </div>
           {expense.description && <p className="mt-1 text-sm text-gray-600">{expense.description}</p>}
@@ -387,7 +387,7 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
 
       {/* Associate with task */}
       <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-        <option value="">📋 Sin tarea asociada</option>
+        <option value="">Sin tarea asociada</option>
         {homeTasks?.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
       </select>
 
@@ -449,7 +449,7 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
       {!editingExpense && (
         <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
           <input type="file" accept="image/*,application/pdf" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} className="hidden" />
-          <span className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50">📎 {receiptFile ? receiptFile.name : 'Adjuntar recibo'}</span>
+          <span className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50">{receiptFile ? receiptFile.name : 'Adjuntar recibo'}</span>
         </label>
       )}
 
@@ -603,7 +603,7 @@ function BalanceView({ homeId }: { homeId: string }) {
         ))}
       </div>
 
-      <p className="text-xs text-gray-500">Verde = le deben · Rojo = debe a otros · 💸 para registrar pago</p>
+      <p className="text-xs text-gray-500">Verde = le deben · Rojo = debe a otros</p>
     </div>
   )
 }
