@@ -142,7 +142,7 @@ export function DashboardPage() {
             {activeTab === 'stats' && <StatsPanel homeId={activeHome.id} />}
             {activeTab === 'activity' && <ActivityFeed homeId={activeHome.id} />}
             {activeTab === 'members' && <MembersPanel members={members} homeId={activeHome.id} />}
-            {activeTab === 'settings' && <SettingsPanel />}
+            {activeTab === 'settings' && <SettingsPanel homeId={activeHome.id} />}
           </Suspense>
         </ErrorBoundary>
       </main>
