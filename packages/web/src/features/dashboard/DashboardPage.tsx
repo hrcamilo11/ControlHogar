@@ -147,14 +147,14 @@ export function DashboardPage() {
             {activeTab === 'finance' && <FinancePanel homeId={activeHome.id} />}
             {activeTab === 'hogar' && (
               <div className="space-y-4">
-                {/* Hogar sub-tabs */}
-                <div className="flex items-center gap-4">
+                {/* Hogar sub-tabs — chips style */}
+                <div className="flex items-center gap-2">
                   {([
                     { key: 'maintenance', label: 'Mantenimientos', icon: <Wrench className="h-3.5 w-3.5" /> },
                     { key: 'members', label: 'Miembros', icon: <Users className="h-3.5 w-3.5" /> },
                     { key: 'activity', label: 'Actividad', icon: <Bell className="h-3.5 w-3.5" /> },
                   ] as const).map(({ key, label, icon }) => (
-                    <button key={key} onClick={() => setHogarSubTab(key)} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${hogarSubTab === key ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <button key={key} onClick={() => setHogarSubTab(key)} className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all ${hogarSubTab === key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
                       {icon} {label}
                     </button>
                   ))}
@@ -166,15 +166,15 @@ export function DashboardPage() {
             )}
             {activeTab === 'more' && (
               <div className="space-y-4">
-                {/* More sub-tabs */}
-                <div className="flex items-center gap-4">
+                {/* More sub-tabs — chips style */}
+                <div className="flex items-center gap-2 flex-wrap">
                   {([
                     { key: 'notifications', label: 'Alertas', icon: <BellRing className="h-3.5 w-3.5" /> },
                     { key: 'stats', label: 'Estadísticas', icon: <BarChart3 className="h-3.5 w-3.5" /> },
                     { key: 'calendar', label: 'Calendario', icon: <Calendar className="h-3.5 w-3.5" /> },
                     { key: 'settings', label: 'Configuración', icon: <Settings className="h-3.5 w-3.5" /> },
                   ] as const).map(({ key, label, icon }) => (
-                    <button key={key} onClick={() => setMoreSubTab(key)} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${moreSubTab === key ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <button key={key} onClick={() => setMoreSubTab(key)} className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all ${moreSubTab === key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
                       {icon} {label}
                     </button>
                   ))}

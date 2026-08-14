@@ -221,9 +221,9 @@ export function TasksPanel({ homeId }: { homeId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <button onClick={() => setActiveView('list')} className={`text-sm font-medium ${activeView === 'list' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Tareas activas</button>
-        <button onClick={() => setActiveView('history')} className={`text-sm font-medium ${activeView === 'history' ? 'text-primary-600 underline' : 'text-gray-500'}`}>Historial</button>
+      <div className="flex items-center gap-2">
+        <button onClick={() => setActiveView('list')} className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${activeView === 'list' ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}>Tareas activas</button>
+        <button onClick={() => setActiveView('history')} className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${activeView === 'history' ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}>Historial</button>
       </div>
 
       {activeView === 'history' && <TaskHistory homeId={homeId} members={members ?? []} />}
@@ -244,7 +244,7 @@ export function TasksPanel({ homeId }: { homeId: string }) {
               {['all', session!.user.id, 'unassigned'].map((filter, i) => {
                 const labels = ['Todas', 'Mías', 'Sin asignar']
                 return (
-                  <button key={filter} onClick={() => setFilterAssignee(filter)} className={`rounded-full px-3 py-1 text-xs font-medium ${filterAssignee === filter ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <button key={filter} onClick={() => setFilterAssignee(filter)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${filterAssignee === filter ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>
                     {labels[i]}
                   </button>
                 )
@@ -254,7 +254,7 @@ export function TasksPanel({ homeId }: { homeId: string }) {
               {(['all', 'today', 'week', 'month', 'overdue'] as const).map((filter) => {
                 const labels: Record<string, string> = { all: 'Todas', today: 'Hoy', week: 'Semana', month: 'Mes', overdue: 'Atrasadas' }
                 return (
-                  <button key={filter} onClick={() => setFilterDate(filter)} className={`rounded-full px-3 py-1 text-xs font-medium ${filterDate === filter ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <button key={filter} onClick={() => setFilterDate(filter)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${filterDate === filter ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>
                     {labels[filter]}
                   </button>
                 )

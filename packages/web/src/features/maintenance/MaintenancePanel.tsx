@@ -106,7 +106,7 @@ export function MaintenancePanel({ homeId }: { homeId: string }) {
           { key: 'completed', label: 'Completados' },
           { key: 'all', label: 'Todos' },
         ].map((f) => (
-          <button key={f.key} onClick={() => setFilter(f.key)} className={`rounded-full px-3 py-1 text-xs font-medium ${filter === f.key ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{f.label}</button>
+          <button key={f.key} onClick={() => setFilter(f.key)} className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${filter === f.key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}>{f.label}</button>
         ))}
       </div>
 
