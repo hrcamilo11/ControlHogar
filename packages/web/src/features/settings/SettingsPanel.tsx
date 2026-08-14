@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
+import { setLocale, getLocale } from '@/lib/i18n'
 import toast from 'react-hot-toast'
-import { Moon, Sun, Monitor, User, Lock, Home, Tag, Download, LogOut, Crown, DoorOpen } from 'lucide-react'
+import { Moon, Sun, Monitor, User, Lock, Home, Tag, Download, LogOut, Crown, DoorOpen, Globe } from 'lucide-react'
 
 type Theme = 'light' | 'dark' | 'amoled' | 'system'
 type SettingsSection = 'appearance' | 'profile' | 'home' | 'categories' | 'export'
@@ -51,24 +52,49 @@ export function SettingsPanel({ homeId }: { homeId?: string }) {
 // ─── Appearance ───
 function AppearanceSection() {
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) ?? 'system')
+  const [locale, setLocaleState] = useState(() => getLocale())
 
   useEffect(() => { applyTheme(theme); localStorage.setItem('theme', theme) }, [theme])
 
+  const handleLocaleChange = (newLocale: 'es' | 'en') => {
+    setLocale(newLocale)
+    setLocaleState(newLocale)
+    toast.success(newLocale === 'es' ? 'Idioma cambiado a español' : 'Language changed to English')
+  }
+
   return (
-    <section className="space-y-4">
+    <section className="space-y-6">
       <h3 className="text-lg font-semibold">Apariencia</h3>
-      <div className="flex gap-3 flex-wrap">
-        {([
-          { value: 'light', label: 'Claro', icon: Sun },
-          { value: 'dark', label: 'Oscuro', icon: Moon },
-          { value: 'amoled', label: 'AMOLED', icon: Moon },
-          { value: 'system', label: 'Sistema', icon: Monitor },
-        ] as const).map(({ value, label, icon: Icon }) => (
-          <button key={value} onClick={() => setTheme(value)} className={`flex flex-col items-center gap-2 rounded-xl border-2 px-5 py-3 transition-all ${theme === value ? 'border-primary-500 bg-primary-50 dark:bg-transparent' : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'}`}>
-            <Icon className={`h-5 w-5 ${theme === value ? 'text-primary-600' : 'text-gray-500'}`} />
-            <span className={`text-xs font-medium ${theme === value ? 'text-primary-700' : 'text-gray-600'}`}>{label}</span>
+
+      {/* Theme */}
+      <div className="space-y-2">
+        <label className="text-sm text-gray-600">Tema</label>
+        <div className="flex gap-3 flex-wrap">
+          {([
+            { value: 'light', label: 'Claro', icon: Sun },
+            { value: 'dark', label: 'Oscuro', icon: Moon },
+            { value: 'amoled', label: 'AMOLED', icon: Moon },
+            { value: 'system', label: 'Sistema', icon: Monitor },
+          ] as const).map(({ value, label, icon: Icon }) => (
+            <button key={value} onClick={() => setTheme(value)} className={`flex flex-col items-center gap-2 rounded-xl border-2 px-5 py-3 transition-all ${theme === value ? 'border-primary-500 bg-primary-50 dark:bg-transparent' : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'}`}>
+              <Icon className={`h-5 w-5 ${theme === value ? 'text-primary-600' : 'text-gray-500'}`} />
+              <span className={`text-xs font-medium ${theme === value ? 'text-primary-700' : 'text-gray-600'}`}>{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Language */}
+      <div className="space-y-2">
+        <label className="text-sm text-gray-600 flex items-center gap-2"><Globe className="h-4 w-4" /> Idioma</label>
+        <div className="flex gap-3">
+          <button onClick={() => handleLocaleChange('es')} className={`rounded-xl border-2 px-5 py-3 text-sm font-medium transition-all ${locale === 'es' ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700'}`}>
+            Español
           </button>
-        ))}
+          <button onClick={() => handleLocaleChange('en')} className={`rounded-xl border-2 px-5 py-3 text-sm font-medium transition-all ${locale === 'en' ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700'}`}>
+            English
+          </button>
+        </div>
       </div>
     </section>
   )
