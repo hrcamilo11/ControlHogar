@@ -456,17 +456,41 @@ function TaskCard({
           {task.description && <p className="mt-1 text-sm text-gray-600">{task.description}</p>}
         </div>
 
-        <div className="ml-4 flex items-center gap-2">
+        <div className="ml-4 flex items-center gap-1">
           {canEdit && (
-            <>
-              <button onClick={onStartEdit} className="text-xs text-gray-400 hover:text-gray-600" title="Editar">✏️</button>
+            <div className="flex items-center gap-1 mr-2">
+              <button
+                onClick={onStartEdit}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-primary-600 transition-colors"
+                title="Editar tarea"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
               {task.frequency_type !== 'once' && (
-                <button onClick={handleTogglePause} className="text-xs text-gray-400 hover:text-yellow-600" title={isPaused ? 'Reactivar' : 'Pausar'}>
-                  {isPaused ? '▶️' : '⏸️'}
+                <button
+                  onClick={handleTogglePause}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${isPaused ? 'text-green-500 hover:bg-green-50 hover:text-green-600' : 'text-gray-400 hover:bg-yellow-50 hover:text-yellow-600'}`}
+                  title={isPaused ? 'Reactivar tarea' : 'Pausar tarea'}
+                >
+                  {isPaused ? (
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  ) : (
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                  )}
                 </button>
               )}
-              <button onClick={handleDelete} className="text-xs text-gray-400 hover:text-red-600" title="Eliminar">🗑️</button>
-            </>
+              <button
+                onClick={handleDelete}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                title="Eliminar tarea"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
           )}
           {canComplete && (
             <button
@@ -480,11 +504,19 @@ function TaskCard({
                 onComplete()
               }}
               disabled={isCompleting}
-              className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-green-400 text-green-600 hover:bg-green-50 disabled:opacity-50 transition-all"
+              className={`flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-all ${
+                isCompleting
+                  ? 'border-gray-300 text-gray-400'
+                  : 'border-green-400 text-green-600 hover:bg-green-500 hover:text-white hover:border-green-500 hover:shadow-md'
+              } disabled:opacity-50`}
               title="Completar tarea"
               data-testid={`task-complete-${task.id}`}
             >
-              {isCompleting ? '...' : '✓'}
+              {isCompleting ? (
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              )}
             </button>
           )}
         </div>
