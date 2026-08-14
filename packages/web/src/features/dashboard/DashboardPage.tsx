@@ -7,8 +7,9 @@ import { StatsPanel } from './StatsPanel'
 import { SearchBar } from '@/components/SearchBar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ListSkeleton } from '@/components/Skeleton'
+import { NotificationBadge } from '../notifications/NotificationsPanel'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings, Calendar } from 'lucide-react'
+import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings, Calendar, BellRing } from 'lucide-react'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
@@ -18,16 +19,21 @@ const TasksPanel = lazy(() => import('../tasks/TasksPanel').then((m) => ({ defau
 const FinancePanel = lazy(() => import('../finance/FinancePanel').then((m) => ({ default: m.FinancePanel })))
 const MaintenancePanel = lazy(() => import('../maintenance/MaintenancePanel').then((m) => ({ default: m.MaintenancePanel })))
 const ActivityFeed = lazy(() => import('../activity/ActivityFeed').then((m) => ({ default: m.ActivityFeed })))
+const NotificationsPanel = lazy(() => import('../notifications/NotificationsPanel').then((m) => ({ default: m.NotificationsPanel })))
 const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
 const GlobalCalendar = lazy(() => import('./GlobalCalendar').then((m) => ({ default: m.GlobalCalendar })))
 
-type Tab = 'home' | 'tasks' | 'finance' | 'maintenance' | 'calendar' | 'activity' | 'stats' | 'members' | 'settings'
+type Tab = 'home' | 'tasks' | 'finance' | 'hogar' | 'more'
+type HogarSubTab = 'maintenance' | 'members' | 'activity'
+type MoreSubTab = 'notifications' | 'stats' | 'calendar' | 'settings'
 
 export function DashboardPage() {
   const { session, signOut } = useAuth()
   const { data: homes, isLoading: homesLoading } = useHomes()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('home')
+  const [hogarSubTab, setHogarSubTab] = useState<HogarSubTab>('maintenance')
+  const [moreSubTab, setMoreSubTab] = useState<MoreSubTab>('notifications')
   const [activeHomeIndex, setActiveHomeIndex] = useState(0)
 
   const activeHome = homes?.[activeHomeIndex] ?? null
@@ -51,12 +57,8 @@ export function DashboardPage() {
     { key: 'home', label: 'Inicio', icon: <Home className="h-4 w-4" /> },
     { key: 'tasks', label: 'Tareas', icon: <ClipboardList className="h-4 w-4" /> },
     { key: 'finance', label: 'Finanzas', icon: <Wallet className="h-4 w-4" /> },
-    { key: 'maintenance', label: 'Mantenim.', icon: <Wrench className="h-4 w-4" /> },
-    { key: 'calendar', label: 'Calendario', icon: <Calendar className="h-4 w-4" /> },
-    { key: 'stats', label: 'Estadísticas', icon: <BarChart3 className="h-4 w-4" /> },
-    { key: 'activity', label: 'Actividad', icon: <Bell className="h-4 w-4" /> },
-    { key: 'members', label: 'Miembros', icon: <Users className="h-4 w-4" /> },
-    { key: 'settings', label: 'Config', icon: <Settings className="h-4 w-4" /> },
+    { key: 'hogar', label: 'Hogar', icon: <Wrench className="h-4 w-4" /> },
+    { key: 'more', label: 'Más', icon: <BarChart3 className="h-4 w-4" /> },
   ]
 
   return (
@@ -120,7 +122,10 @@ export function DashboardPage() {
                 }`}
                 data-testid={`tab-${tab.key}`}
               >
-                <span className="mr-1.5 inline-flex">{tab.icon}</span>
+                <span className="mr-1.5 inline-flex relative">
+                  {tab.icon}
+                  {tab.key === 'more' && <NotificationBadge />}
+                </span>
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
@@ -140,12 +145,46 @@ export function DashboardPage() {
             )}
             {activeTab === 'tasks' && <TasksPanel homeId={activeHome.id} />}
             {activeTab === 'finance' && <FinancePanel homeId={activeHome.id} />}
-            {activeTab === 'maintenance' && <MaintenancePanel homeId={activeHome.id} />}
-            {activeTab === 'calendar' && <GlobalCalendar homeId={activeHome.id} />}
-            {activeTab === 'stats' && <StatsPanel homeId={activeHome.id} />}
-            {activeTab === 'activity' && <ActivityFeed homeId={activeHome.id} />}
-            {activeTab === 'members' && <MembersPanel members={members} homeId={activeHome.id} />}
-            {activeTab === 'settings' && <SettingsPanel homeId={activeHome.id} />}
+            {activeTab === 'hogar' && (
+              <div className="space-y-4">
+                {/* Hogar sub-tabs */}
+                <div className="flex items-center gap-4">
+                  {([
+                    { key: 'maintenance', label: 'Mantenimientos', icon: <Wrench className="h-3.5 w-3.5" /> },
+                    { key: 'members', label: 'Miembros', icon: <Users className="h-3.5 w-3.5" /> },
+                    { key: 'activity', label: 'Actividad', icon: <Bell className="h-3.5 w-3.5" /> },
+                  ] as const).map(({ key, label, icon }) => (
+                    <button key={key} onClick={() => setHogarSubTab(key)} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${hogarSubTab === key ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}>
+                      {icon} {label}
+                    </button>
+                  ))}
+                </div>
+                {hogarSubTab === 'maintenance' && <MaintenancePanel homeId={activeHome.id} />}
+                {hogarSubTab === 'members' && <MembersPanel members={members} homeId={activeHome.id} />}
+                {hogarSubTab === 'activity' && <ActivityFeed homeId={activeHome.id} />}
+              </div>
+            )}
+            {activeTab === 'more' && (
+              <div className="space-y-4">
+                {/* More sub-tabs */}
+                <div className="flex items-center gap-4">
+                  {([
+                    { key: 'notifications', label: 'Alertas', icon: <BellRing className="h-3.5 w-3.5" /> },
+                    { key: 'stats', label: 'Estadísticas', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+                    { key: 'calendar', label: 'Calendario', icon: <Calendar className="h-3.5 w-3.5" /> },
+                    { key: 'settings', label: 'Configuración', icon: <Settings className="h-3.5 w-3.5" /> },
+                  ] as const).map(({ key, label, icon }) => (
+                    <button key={key} onClick={() => setMoreSubTab(key)} className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${moreSubTab === key ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'}`}>
+                      {icon} {label}
+                    </button>
+                  ))}
+                </div>
+                {moreSubTab === 'notifications' && <NotificationsPanel />}
+                {moreSubTab === 'stats' && <StatsPanel homeId={activeHome.id} />}
+                {moreSubTab === 'calendar' && <GlobalCalendar homeId={activeHome.id} />}
+                {moreSubTab === 'settings' && <SettingsPanel homeId={activeHome.id} />}
+              </div>
+            )}
           </Suspense>
         </ErrorBoundary>
       </main>
