@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../auth/AuthProvider'
 import { calculateNextDueDate } from '@controlhogar/shared/src/modules/tasks/task-recurrence'
 import { TaskCalendar } from './TaskCalendar'
+import { RotationStats, getNextFairAssignee } from './TaskRotation'
 
 interface Task {
   id: string
@@ -107,16 +108,37 @@ export function TasksPanel({ homeId }: { homeId: string }) {
 
         const updateData: Record<string, unknown> = { next_due_date: nextDue }
 
-        // Handle rotation
+        // Handle rotation — use fair assignment (least completions)
         if (task.rotation_enabled && task.rotation_members.length >= 2) {
-          const newIndex = (task.rotation_index + 1) % task.rotation_members.length
-          updateData.rotation_index = newIndex
+          // Get completion counts for fair rotation
+          const { data: completions } = await supabase
+            .from('task_completions')
+            .select('completed_by')
+            .eq('task_id', taskId)
 
-          // Reassign to next person
+          const counts: Record<string, number> = {}
+          for (const uid of task.rotation_members) {
+            counts[uid] = 0
+          }
+          for (const c of completions ?? []) {
+            if (counts[c.completed_by] !== undefined) {
+              counts[c.completed_by]!++
+            }
+          }
+
+          const { nextUserId, nextIndex } = getNextFairAssignee(
+            task.rotation_members,
+            task.rotation_index,
+            counts,
+          )
+
+          updateData.rotation_index = nextIndex
+
+          // Reassign to the fairest next person
           await supabase.from('task_assignments').delete().eq('task_id', taskId)
           await supabase.from('task_assignments').insert({
             task_id: taskId,
-            user_id: task.rotation_members[newIndex]!,
+            user_id: nextUserId,
           })
         }
 
@@ -471,6 +493,11 @@ function TaskCard({
       {/* Inline assignee editor */}
       {showAssignEdit && canEdit && (
         <AssigneeEditor taskId={task.id} members={members} currentAssignees={task.task_assignments.map((a) => a.user_id)} onSave={handleUpdateAssignees} onCancel={() => setShowAssignEdit(false)} />
+      )}
+
+      {/* Rotation fairness stats */}
+      {task.rotation_enabled && task.rotation_members.length >= 2 && (
+        <RotationStats taskId={task.id} rotationMembers={task.rotation_members} currentAssignees={task.task_assignments.map((a) => a.user_id)} homeId={homeId} />
       )}
     </div>
   )
