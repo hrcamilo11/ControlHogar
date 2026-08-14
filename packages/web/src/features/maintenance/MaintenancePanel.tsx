@@ -363,7 +363,7 @@ function MaintenanceForm({ homeId, members, editingItem, onSaved, onCancel }: {
       <textarea placeholder="Descripción o detalles (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={1000} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
 
       <div className="grid grid-cols-2 gap-2">
-        <select value={priority} onChange={(e) => setPriority(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <select value={priority} onChange={(e) => setPriority(e.target.value as 'high' | 'medium' | 'low')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
           <option value="high">Alta</option>
           <option value="medium">Media</option>
           <option value="low">Baja</option>
