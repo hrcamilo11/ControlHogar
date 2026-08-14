@@ -68,4 +68,47 @@
   .dark .shadow-sm {
     @apply !shadow-none;
   }
+
+  /* AMOLED theme - pure black backgrounds */
+  .amoled {
+    --amoled-bg: #000000;
+    --amoled-card: #0a0a0a;
+    --amoled-border: #1a1a1a;
+  }
+
+  .amoled .bg-white,
+  .amoled .dark .bg-white {
+    background-color: var(--amoled-card) !important;
+  }
+
+  .amoled .bg-gray-50,
+  .amoled .dark .bg-gray-50,
+  .amoled body {
+    background-color: var(--amoled-bg) !important;
+  }
+
+  .amoled .bg-gray-800 {
+    background-color: var(--amoled-card) !important;
+  }
+
+  .amoled .bg-gray-900 {
+    background-color: var(--amoled-bg) !important;
+  }
+
+  .amoled .bg-gray-700 {
+    background-color: #111111 !important;
+  }
+
+  .amoled .border-gray-200,
+  .amoled .border-gray-700,
+  .amoled .border-gray-600 {
+    border-color: var(--amoled-border) !important;
+  }
+
+  .amoled input,
+  .amoled textarea,
+  .amoled select {
+    background-color: #111111 !important;
+    border-color: var(--amoled-border) !important;
+  }
 }

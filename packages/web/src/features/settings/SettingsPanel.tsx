@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { Moon, Sun, Monitor, User, Lock, Bell } from 'lucide-react'
 
-type Theme = 'light' | 'dark' | 'system'
+type Theme = 'light' | 'dark' | 'amoled' | 'system'
 
 export function SettingsPanel() {
   const { session, signOut } = useAuth()
@@ -44,10 +44,11 @@ export function SettingsPanel() {
       {/* Theme */}
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Apariencia</h3>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           {([
             { value: 'light', label: 'Claro', icon: Sun },
             { value: 'dark', label: 'Oscuro', icon: Moon },
+            { value: 'amoled', label: 'AMOLED', icon: Moon },
             { value: 'system', label: 'Sistema', icon: Monitor },
           ] as const).map(({ value, label, icon: Icon }) => (
             <button
@@ -127,16 +128,18 @@ export function SettingsPanel() {
 function applyTheme(theme: Theme) {
   const root = document.documentElement
 
+  root.classList.remove('dark', 'amoled')
+
   if (theme === 'dark') {
     root.classList.add('dark')
+  } else if (theme === 'amoled') {
+    root.classList.add('dark', 'amoled')
   } else if (theme === 'light') {
-    root.classList.remove('dark')
+    // No class needed
   } else {
     // System
     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
     }
   }
 }

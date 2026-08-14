@@ -10,7 +10,9 @@ import './index.css'
 
 // Apply saved theme on load
 const savedTheme = localStorage.getItem('theme') ?? 'system'
-if (savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+if (savedTheme === 'amoled') {
+  document.documentElement.classList.add('dark', 'amoled')
+} else if (savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
   document.documentElement.classList.add('dark')
 }
 
