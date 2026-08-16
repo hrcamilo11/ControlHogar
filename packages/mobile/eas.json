@@ -1,18 +1,30 @@
 {
   "cli": {
-    "version": ">= 22.0.0",
-    "appVersionSource": "remote"
+    "version": ">= 10.0.0",
+    "appVersionSource": "local"
   },
   "build": {
+    "base": {
+      "node": "20.20.0",
+      "pnpm": "9.0.0"
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "extends": "base",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "extends": "base",
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {
