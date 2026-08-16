@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
-import { Moon, Sun, Monitor, User, Lock, Home, Tag, Download, LogOut, Crown, DoorOpen, Globe } from 'lucide-react'
+import { Moon, Sun, Monitor, User, Lock, Home, Tag, Download, LogOut, Crown, DoorOpen, Globe, UserPlus } from 'lucide-react'
 import { accentPresets, applyAccentColor } from '@/lib/accentColors'
 
 type Theme = 'light' | 'dark' | 'amoled' | 'system'
-type SettingsSection = 'appearance' | 'profile' | 'home' | 'categories' | 'export'
+type SettingsSection = 'appearance' | 'profile' | 'home' | 'members' | 'categories' | 'export'
 
 export function SettingsPanel({ homeId }: { homeId?: string }) {
   const [activeSection, setActiveSection] = useState<SettingsSection>('appearance')
@@ -16,6 +16,7 @@ export function SettingsPanel({ homeId }: { homeId?: string }) {
     { key: 'appearance', label: 'Apariencia', icon: Sun },
     { key: 'profile', label: 'Cuenta', icon: User },
     { key: 'home', label: 'Hogar', icon: Home },
+    { key: 'members', label: 'Miembros', icon: Globe },
     { key: 'categories', label: 'Categorías', icon: Tag },
     { key: 'export', label: 'Datos', icon: Download },
   ]
@@ -42,6 +43,7 @@ export function SettingsPanel({ homeId }: { homeId?: string }) {
         {activeSection === 'appearance' && <AppearanceSection />}
         {activeSection === 'profile' && <ProfileSection />}
         {activeSection === 'home' && <HomeSection homeId={homeId} />}
+        {activeSection === 'members' && <MembersSection homeId={homeId} />}
         {activeSection === 'categories' && <CategoriesSection homeId={homeId} />}
         {activeSection === 'export' && <ExportSection homeId={homeId} />}
       </div>
@@ -469,6 +471,169 @@ function ExportSection({ homeId }: { homeId?: string }) {
             <Download className="h-4 w-4 mb-1 text-gray-400" />
             {label}
           </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ─── Members ───
+function MembersSection({ homeId }: { homeId?: string }) {
+  const { session } = useAuth()
+  const queryClient = useQueryClient()
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('member')
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [isInviting, setIsInviting] = useState(false)
+
+  const { data: members } = useQuery({
+    queryKey: ['home-members', homeId],
+    enabled: !!homeId,
+    queryFn: async () => {
+      const { data } = await supabase.from('home_members').select('user_id, role, profiles(display_name, email)').eq('home_id', homeId!)
+      return (data ?? []).map((m: any) => ({ ...m, profiles: Array.isArray(m.profiles) ? m.profiles[0] : m.profiles }))
+    },
+  })
+
+  const { data: invitations } = useQuery({
+    queryKey: ['invitations', homeId],
+    enabled: !!homeId && showInvite,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('invitations').select('*').eq('home_id', homeId!).is('accepted_at', null).is('revoked_at', null).order('created_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+  })
+
+  if (!homeId) return <p className="text-sm text-gray-500">Selecciona un hogar primero</p>
+  if (!members) return <p className="text-sm text-gray-500">Cargando...</p>
+
+  const currentUserRole = members.find((m: any) => m.user_id === session?.user.id)?.role
+  const canManage = currentUserRole === 'owner' || currentUserRole === 'admin'
+
+  const handleChangeRole = async (userId: string, newRole: string) => {
+    const { error } = await supabase.from('home_members').update({ role: newRole }).eq('home_id', homeId!).eq('user_id', userId)
+    if (error) toast.error(error.message)
+    else { queryClient.invalidateQueries({ queryKey: ['home-members', homeId] }); toast.success('Rol actualizado') }
+  }
+
+  const handleRemoveMember = async (userId: string, displayName: string) => {
+    if (!confirm(`¿Eliminar a ${displayName} del hogar?`)) return
+    const { error } = await supabase.from('home_members').delete().eq('home_id', homeId!).eq('user_id', userId)
+    if (error) toast.error(error.message)
+    else { queryClient.invalidateQueries({ queryKey: ['home-members', homeId] }); toast.success('Miembro eliminado') }
+  }
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsInviting(true)
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32))).map((b) => b.toString(16).padStart(2, '0')).join('')
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const { error } = await supabase.from('invitations').insert({ home_id: homeId, invited_by: session!.user.id, email: inviteEmail || null, role: inviteRole, token, expires_at: expiresAt })
+    if (error) toast.error(error.message)
+    else { setInviteLink(`${window.location.origin}/invite/${token}`); toast.success('Invitación creada') }
+    setIsInviting(false)
+  }
+
+  const handleRevoke = async (id: string) => {
+    if (!confirm('¿Revocar invitación?')) return
+    await supabase.from('invitations').update({ revoked_at: new Date().toISOString() }).eq('id', id)
+    queryClient.invalidateQueries({ queryKey: ['invitations', homeId] })
+    toast.success('Revocada')
+  }
+
+  const activeInvitations = invitations?.filter((inv) => new Date(inv.expires_at) > new Date()) ?? []
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Miembros ({members.length})</h3>
+        {canManage && (
+          <button onClick={() => { setShowInvite(!showInvite); setInviteLink(null) }} className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors">
+            <UserPlus className="h-4 w-4" /> Invitar
+          </button>
+        )}
+      </div>
+
+      {/* Invite form */}
+      {showInvite && !inviteLink && (
+        <form onSubmit={handleInvite} className="rounded-lg border border-gray-200 bg-white p-4 space-y-3 dark:bg-gray-800 dark:border-gray-700">
+          <input type="email" placeholder="Email (opcional)" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
+          <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+            <option value="member">Miembro</option>
+            <option value="guest">Invitado</option>
+            <option value="admin">Admin</option>
+          </select>
+          <div className="flex gap-2">
+            <button type="submit" disabled={isInviting} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">{isInviting ? 'Creando...' : 'Generar Invitación'}</button>
+            <button type="button" onClick={() => setShowInvite(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">Cancelar</button>
+          </div>
+        </form>
+      )}
+
+      {/* Invite link result */}
+      {inviteLink && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 space-y-3">
+          <p className="text-sm font-medium text-green-800">Invitación creada</p>
+          <div className="flex gap-2">
+            <input type="text" readOnly value={inviteLink} className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs" />
+            <button onClick={() => { navigator.clipboard.writeText(inviteLink); toast.success('Copiado') }} className="rounded-lg bg-primary-600 px-3 py-2 text-xs font-medium text-white">Copiar</button>
+          </div>
+          <p className="text-xs text-green-700">Expira en 24 horas</p>
+          <button onClick={() => { setInviteLink(null); setShowInvite(false) }} className="text-xs text-gray-600 underline">Cerrar</button>
+        </div>
+      )}
+
+      {/* Pending invitations */}
+      {showInvite && activeInvitations.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-500 uppercase">Invitaciones pendientes</p>
+          {activeInvitations.map((inv) => (
+            <div key={inv.id} className="flex items-center justify-between rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2">
+              <div>
+                <p className="text-xs text-gray-700">{inv.email ?? 'Enlace genérico'} — <span className="capitalize">{inv.role}</span></p>
+                <p className="text-xs text-gray-400">Expira {new Date(inv.expires_at).toLocaleString('es-CO')}</p>
+              </div>
+              <button onClick={() => handleRevoke(inv.id)} className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50">Revocar</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Members list */}
+      <div className="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800">
+        {members.map((member: any) => (
+          <div key={member.user_id} className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-sm font-medium text-primary-700">
+                {member.profiles?.display_name?.[0]?.toUpperCase() ?? '?'}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {member.profiles?.display_name}
+                  {member.user_id === session?.user.id && ' (tú)'}
+                </p>
+                <p className="text-xs text-gray-500">{member.profiles?.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {canManage && member.role !== 'owner' && member.user_id !== session?.user.id ? (
+                <>
+                  <select value={member.role} onChange={(e) => handleChangeRole(member.user_id, e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs">
+                    <option value="admin">Admin</option>
+                    <option value="member">Miembro</option>
+                    <option value="guest">Invitado</option>
+                  </select>
+                  <button onClick={() => handleRemoveMember(member.user_id, member.profiles?.display_name)} className="text-xs text-red-500 hover:text-red-700">✕</button>
+                </>
+              ) : (
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${member.role === 'owner' ? 'bg-yellow-100 text-yellow-800' : member.role === 'admin' ? 'bg-blue-100 text-blue-800' : member.role === 'member' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                  {member.role}
+                </span>
+              )}
+            </div>
+          </div>
         ))}
       </div>
     </section>
