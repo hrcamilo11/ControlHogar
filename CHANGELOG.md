@@ -147,7 +147,7 @@
 - [x] **Fix transferir ownership**: ahora muestra lista numerada de candidatos y deja elegir
 - [x] **Fix exportar datos**: cambiado de JSON a CSV (compatible con Excel, con BOM UTF-8)
 - [x] **Eliminar reporte TXT**: eliminado, las estadísticas visuales + CSV cubren la necesidad
-- [ ] **Frecuencia "custom" (cada X días)**: evaluar si exponer en UI o eliminar del código
+- [x] **Frecuencia "custom" (cada X días)**: expuesto en UI con input de días (2-365) + hora
 
 ### Prioridad 2: Mejoras Funcionales
 

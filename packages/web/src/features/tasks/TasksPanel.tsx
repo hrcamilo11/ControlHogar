@@ -564,6 +564,7 @@ function EditTaskForm({ task, members, homeId, onSaved, onCancel }: {
   const [frequencyType, setFrequencyType] = useState(task.frequency_type === 'weekly_custom' ? 'weekly' : task.frequency_type)
   const [selectedDays, setSelectedDays] = useState<number[]>(config?.daysOfWeek ?? [])
   const [dayOfMonth, setDayOfMonth] = useState(config?.dayOfMonth ?? 1)
+  const [intervalDays, setIntervalDays] = useState(config?.intervalDays ?? 3)
   const [hour, setHour] = useState(config?.hour ?? 8)
   const [minute, setMinute] = useState(config?.minute ?? 0)
   const [isLoading, setIsLoading] = useState(false)
@@ -598,6 +599,9 @@ function EditTaskForm({ task, members, homeId, onSaved, onCancel }: {
         break
       case 'monthly':
         frequencyConfig = { dayOfMonth, hour, minute }
+        break
+      case 'custom':
+        frequencyConfig = { intervalDays, hour, minute }
         break
     }
 
@@ -640,7 +644,31 @@ function EditTaskForm({ task, members, homeId, onSaved, onCancel }: {
         <option value="weekly">Semanal</option>
         <option value="biweekly">Quincenal</option>
         <option value="monthly">Mensual</option>
+        <option value="custom">Personalizada (cada X días)</option>
       </select>
+
+      {/* Custom: every X days + time */}
+      {frequencyType === 'custom' && (
+        <div className="space-y-2">
+          <div className="flex items-baseline gap-2">
+            <label className="text-xs text-gray-600">Repetir cada</label>
+            <input type="number" min={2} max={365} value={intervalDays} onChange={(e) => setIntervalDays(Math.max(2, Math.min(365, Number(e.target.value) || 2)))} className="w-16 rounded-lg border border-gray-300 px-2 py-1 text-sm text-center font-bold" />
+            <span className="text-xs text-gray-600">días</span>
+          </div>
+          <div>
+            <label className="text-xs text-gray-600">Hora:</label>
+            <div className="mt-1 flex gap-1 items-center">
+              <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+              </select>
+              <span className="text-gray-500 font-medium">:</span>
+              <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className="rounded border border-gray-300 px-2 py-1 text-sm">
+                {[0, 15, 30, 45].map((m) => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Daily: time */}
       {frequencyType === 'daily' && (
@@ -740,7 +768,7 @@ function formatFrequencyDisplay(frequencyType: string, config: Record<string, un
       return `Mensual: día ${dayOfMonth ?? '?'}${timeStr}`
     }
     case 'custom':
-      return `Cada ${config?.intervalDays ?? '?'} días`
+      return `Cada ${config?.intervalDays ?? '?'} días${timeStr}`
     default:
       return frequencyType
   }
@@ -786,6 +814,7 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
   const [minute, setMinute] = useState(0)
   const [dueDate, setDueDate] = useState('')
   const [dueTime, setDueTime] = useState('')
+  const [intervalDays, setIntervalDays] = useState(3)
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
   const [rotationEnabled, setRotationEnabled] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -842,6 +871,9 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
         break
       case 'monthly':
         frequencyConfig = { dayOfMonth, hour, minute }
+        break
+      case 'custom':
+        frequencyConfig = { intervalDays, hour, minute }
         break
     }
 
