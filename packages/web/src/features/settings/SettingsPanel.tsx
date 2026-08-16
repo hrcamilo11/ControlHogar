@@ -191,7 +191,7 @@ function ProfileSection() {
 function HomeSection({ homeId }: { homeId?: string }) {
   const { session } = useAuth()
   const queryClient = useQueryClient()
-  const { confirm, prompt } = useDialog()
+  const { confirm, select } = useDialog()
   const [homeName, setHomeName] = useState('')
   const [homeDescription, setHomeDescription] = useState('')
   const [currency, setCurrency] = useState('COP')
@@ -239,14 +239,21 @@ function HomeSection({ homeId }: { homeId?: string }) {
 
     if (candidates.length === 0) { toast.error('No hay miembros elegibles para transferir'); return }
 
-    const names = candidates.map((m: any, i: number) => `${i + 1}. ${(m as any).profiles?.display_name ?? 'Sin nombre'}`).join('\n')
-    const choice = await prompt({ title: 'Transferir propiedad', message: `¿A quién transferir?\n\n${names}`, placeholder: 'Escribe el número', confirmText: 'Transferir' })
+    const selectedKey = await select({
+      title: 'Transferir propiedad',
+      message: '¿A quién transferir la propiedad del hogar?',
+      options: candidates.map((m: any) => ({
+        key: m.user_id,
+        label: m.profiles?.display_name ?? 'Sin nombre',
+        description: m.role,
+      })),
+    })
 
-    if (!choice) return
-    const index = parseInt(choice) - 1
-    if (isNaN(index) || index < 0 || index >= candidates.length) { toast.error('Opción inválida'); return }
+    if (!selectedKey) return
 
-    const target = candidates[index] as any
+    const target = candidates.find((m: any) => m.user_id === selectedKey) as any
+    if (!target) return
+
     const ok = await confirm({ title: 'Confirmar transferencia', message: `¿Transferir la propiedad del hogar a ${target.profiles?.display_name}? Tú pasarás a ser admin.`, confirmText: 'Transferir', variant: 'warning' })
     if (!ok) return
 

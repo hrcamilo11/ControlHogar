@@ -17,9 +17,23 @@ interface PromptOptions {
   cancelText?: string
 }
 
+interface SelectOption {
+  key: string
+  label: string
+  description?: string
+}
+
+interface SelectOptions {
+  title?: string
+  message?: string
+  options: SelectOption[]
+  cancelText?: string
+}
+
 interface DialogContextType {
   confirm: (options: ConfirmOptions) => Promise<boolean>
   prompt: (options: PromptOptions) => Promise<string | null>
+  select: (options: SelectOptions) => Promise<string | null>
 }
 
 const DialogContext = createContext<DialogContextType | null>(null)
@@ -36,6 +50,12 @@ export function usePrompt() {
   return ctx.prompt
 }
 
+export function useSelect() {
+  const ctx = useContext(DialogContext)
+  if (!ctx) throw new Error('useSelect must be used within DialogProvider')
+  return ctx.select
+}
+
 export function useDialog() {
   const ctx = useContext(DialogContext)
   if (!ctx) throw new Error('useDialog must be used within DialogProvider')
@@ -45,6 +65,7 @@ export function useDialog() {
 type DialogState =
   | { type: 'confirm'; options: ConfirmOptions }
   | { type: 'prompt'; options: PromptOptions }
+  | { type: 'select'; options: SelectOptions }
   | null
 
 export function DialogProvider({ children }: { children: ReactNode }) {
@@ -67,6 +88,13 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const select = useCallback((options: SelectOptions): Promise<string | null> => {
+    return new Promise((resolve) => {
+      resolveRef.current = resolve
+      setDialog({ type: 'select', options })
+    })
+  }, [])
+
   const handleConfirm = () => {
     if (dialog?.type === 'prompt') {
       resolveRef.current?.(promptValue || null)
@@ -77,11 +105,12 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   }
 
   const handleCancel = () => {
-    if (dialog?.type === 'prompt') {
-      resolveRef.current?.(null)
-    } else {
-      resolveRef.current?.(false)
-    }
+    resolveRef.current?.(dialog?.type === 'confirm' ? false : null)
+    setDialog(null)
+  }
+
+  const handleSelectOption = (key: string) => {
+    resolveRef.current?.(key)
     setDialog(null)
   }
 
@@ -93,7 +122,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <DialogContext.Provider value={{ confirm, prompt }}>
+    <DialogContext.Provider value={{ confirm, prompt, select }}>
       {children}
 
       {dialog && (
@@ -114,7 +143,9 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                   {dialog.options.title && (
                     <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{dialog.options.title}</h3>
                   )}
-                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line">{dialog.options.message}</p>
+                  {'message' in dialog.options && dialog.options.message && (
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line">{dialog.options.message}</p>
+                  )}
                 </div>
               </div>
               <button onClick={handleCancel} className="ml-2 rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700">
@@ -131,28 +162,58 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                   value={promptValue}
                   onChange={(e) => setPromptValue(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleConfirm() }}
-                  placeholder={dialog.options.placeholder}
+                  placeholder={(dialog.options as PromptOptions).placeholder}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                 />
               </div>
             )}
 
-            {/* Actions */}
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={handleCancel}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                {dialog.options.cancelText ?? 'Cancelar'}
-              </button>
-              <button
-                autoFocus={dialog.type === 'confirm'}
-                onClick={handleConfirm}
-                className={`rounded-lg px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${variantStyles[variant]}`}
-              >
-                {dialog.options.confirmText ?? 'Confirmar'}
-              </button>
-            </div>
+            {/* Select options as buttons */}
+            {dialog.type === 'select' && (
+              <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
+                {dialog.options.options.map((option) => (
+                  <button
+                    key={option.key}
+                    onClick={() => handleSelectOption(option.key)}
+                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-left transition-colors hover:border-primary-400 hover:bg-primary-50 dark:border-gray-600 dark:hover:border-primary-500 dark:hover:bg-primary-900/20"
+                  >
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{option.label}</p>
+                    {option.description && <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{option.description}</p>}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Actions (confirm and prompt only) */}
+            {dialog.type !== 'select' && (
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  onClick={handleCancel}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  {dialog.options.cancelText ?? 'Cancelar'}
+                </button>
+                <button
+                  autoFocus={dialog.type === 'confirm'}
+                  onClick={handleConfirm}
+                  className={`rounded-lg px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${variantStyles[variant]}`}
+                >
+                  {'confirmText' in dialog.options ? (dialog.options as any).confirmText ?? 'Confirmar' : 'Confirmar'}
+                </button>
+              </div>
+            )}
+
+            {/* Cancel button for select */}
+            {dialog.type === 'select' && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={handleCancel}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  {dialog.options.cancelText ?? 'Cancelar'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
