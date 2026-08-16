@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { MonthlyReport } from './MonthlyReport'
 
 export function StatsPanel({ homeId }: { homeId: string }) {
   const now = new Date()
@@ -110,8 +109,7 @@ export function StatsPanel({ homeId }: { homeId: string }) {
         </div>
       </div>
 
-      {/* Monthly Report */}
-      <MonthlyReport homeId={homeId} />
+      {/* Monthly Report — now handled by CSV export in Settings */}
     </div>
   )
 }

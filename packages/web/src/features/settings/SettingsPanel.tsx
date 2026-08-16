@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { setLocale, getLocale } from '@/lib/i18n'
 import toast from 'react-hot-toast'
 import { Moon, Sun, Monitor, User, Lock, Home, Tag, Download, LogOut, Crown, DoorOpen, Globe } from 'lucide-react'
 
@@ -52,15 +51,8 @@ export function SettingsPanel({ homeId }: { homeId?: string }) {
 // ─── Appearance ───
 function AppearanceSection() {
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) ?? 'system')
-  const [locale, setLocaleState] = useState(() => getLocale())
 
   useEffect(() => { applyTheme(theme); localStorage.setItem('theme', theme) }, [theme])
-
-  const handleLocaleChange = (newLocale: 'es' | 'en') => {
-    setLocale(newLocale)
-    setLocaleState(newLocale)
-    toast.success(newLocale === 'es' ? 'Idioma cambiado a español' : 'Language changed to English')
-  }
 
   return (
     <section className="space-y-6">
@@ -81,19 +73,6 @@ function AppearanceSection() {
               <span className={`text-xs font-medium ${theme === value ? 'text-primary-700' : 'text-gray-600'}`}>{label}</span>
             </button>
           ))}
-        </div>
-      </div>
-
-      {/* Language */}
-      <div className="space-y-2">
-        <label className="text-sm text-gray-600 flex items-center gap-2"><Globe className="h-4 w-4" /> Idioma</label>
-        <div className="flex gap-3">
-          <button onClick={() => handleLocaleChange('es')} className={`rounded-xl border-2 px-5 py-3 text-sm font-medium transition-all ${locale === 'es' ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700'}`}>
-            Español
-          </button>
-          <button onClick={() => handleLocaleChange('en')} className={`rounded-xl border-2 px-5 py-3 text-sm font-medium transition-all ${locale === 'en' ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-transparent' : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700'}`}>
-            English
-          </button>
         </div>
       </div>
     </section>
@@ -230,16 +209,25 @@ function HomeSection({ homeId }: { homeId?: string }) {
 
   const handleTransferOwnership = async () => {
     const admins = members?.filter((m: any) => m.role === 'admin' && m.user_id !== session?.user.id) ?? []
-    if (admins.length === 0) { toast.error('No hay otros admins a quiénes transferir'); return }
+    const allMembers = members?.filter((m: any) => m.user_id !== session?.user.id && m.role !== 'guest') ?? []
+    const candidates = admins.length > 0 ? admins : allMembers
 
-    const targetName = (admins[0] as any).profiles?.display_name ?? 'otro admin'
-    if (!confirm(`¿Transferir la propiedad del hogar a ${targetName}? Tú pasarás a ser admin.`)) return
+    if (candidates.length === 0) { toast.error('No hay miembros elegibles para transferir'); return }
 
-    const targetId = (admins[0] as any).user_id
+    const names = candidates.map((m: any, i: number) => `${i + 1}. ${(m as any).profiles?.display_name ?? 'Sin nombre'}`).join('\n')
+    const choice = prompt(`¿A quién transferir la propiedad?\n\n${names}\n\nEscribe el número:`)
+
+    if (!choice) return
+    const index = parseInt(choice) - 1
+    if (isNaN(index) || index < 0 || index >= candidates.length) { toast.error('Opción inválida'); return }
+
+    const target = candidates[index] as any
+    if (!confirm(`¿Transferir la propiedad del hogar a ${target.profiles?.display_name}? Tú pasarás a ser admin.`)) return
+
     await supabase.from('home_members').update({ role: 'admin' }).eq('home_id', homeId!).eq('user_id', session!.user.id)
-    await supabase.from('home_members').update({ role: 'owner' }).eq('home_id', homeId!).eq('user_id', targetId)
+    await supabase.from('home_members').update({ role: 'owner' }).eq('home_id', homeId!).eq('user_id', target.user_id)
     queryClient.invalidateQueries({ queryKey: ['home-members', homeId] })
-    toast.success('Ownership transferido')
+    toast.success(`Ownership transferido a ${target.profiles?.display_name}`)
   }
 
   const handleLeaveHome = async () => {
@@ -391,37 +379,48 @@ function ExportSection({ homeId }: { homeId?: string }) {
     setIsExporting(true)
 
     try {
-      let data: Record<string, unknown[]> = {}
+      const rows: string[][] = []
 
       if (type === 'tasks' || type === 'all') {
-        const { data: tasks } = await supabase.from('tasks').select('*').eq('home_id', homeId)
-        const { data: completions } = await supabase.from('task_completions').select('*, tasks!inner(home_id)').eq('tasks.home_id', homeId)
-        data.tasks = tasks ?? []
-        data.task_completions = completions ?? []
+        const { data: tasks } = await supabase.from('tasks').select('title, frequency_type, next_due_date, is_active, created_at').eq('home_id', homeId)
+        rows.push(['--- TAREAS ---', '', '', '', ''])
+        rows.push(['Título', 'Frecuencia', 'Próxima fecha', 'Activa', 'Creada'])
+        for (const t of tasks ?? []) {
+          rows.push([t.title, t.frequency_type, t.next_due_date ?? 'Sin fecha', t.is_active ? 'Sí' : 'No', new Date(t.created_at).toLocaleDateString('es-CO')])
+        }
+        rows.push(['', '', '', '', ''])
       }
 
       if (type === 'expenses' || type === 'all') {
-        const { data: expenses } = await supabase.from('expenses').select('*, expense_splits(*)').eq('home_id', homeId)
-        const { data: recurring } = await supabase.from('recurring_payments').select('*').eq('home_id', homeId)
-        data.expenses = expenses ?? []
-        data.recurring_payments = recurring ?? []
+        const { data: expenses } = await supabase.from('expenses').select('title, amount, split_type, created_at, profiles:paid_by(display_name), expense_categories(name)').eq('home_id', homeId).order('created_at', { ascending: false })
+        rows.push(['--- GASTOS ---', '', '', '', ''])
+        rows.push(['Título', 'Monto', 'Categoría', 'Pagó', 'Fecha'])
+        for (const e of expenses ?? []) {
+          rows.push([e.title, String(e.amount), (e.expense_categories as any)?.name ?? 'Sin categoría', (e.profiles as any)?.display_name ?? '?', new Date(e.created_at).toLocaleDateString('es-CO')])
+        }
+        rows.push(['', '', '', '', ''])
       }
 
       if (type === 'maintenance' || type === 'all') {
-        const { data: maintenances } = await supabase.from('maintenances').select('*, maintenance_notes(*), maintenance_photos(*)').eq('home_id', homeId)
-        data.maintenances = maintenances ?? []
+        const { data: maintenances } = await supabase.from('maintenances').select('title, status, priority, created_at').eq('home_id', homeId).order('created_at', { ascending: false })
+        rows.push(['--- MANTENIMIENTOS ---', '', '', '', ''])
+        rows.push(['Título', 'Estado', 'Prioridad', 'Fecha', ''])
+        for (const m of maintenances ?? []) {
+          rows.push([m.title, m.status, m.priority, new Date(m.created_at).toLocaleDateString('es-CO'), ''])
+        }
       }
 
-      // Download as JSON
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      // Generate CSV
+      const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }) // BOM for Excel
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `controlhogar-${type}-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `controlhogar-${type}-${new Date().toISOString().split('T')[0]}.csv`
       a.click()
       URL.revokeObjectURL(url)
 
-      toast.success('Datos exportados')
+      toast.success('Datos exportados como CSV')
     } catch (err) {
       toast.error('Error al exportar')
     }
@@ -432,12 +431,12 @@ function ExportSection({ homeId }: { homeId?: string }) {
   return (
     <section className="space-y-4">
       <h3 className="text-lg font-semibold">Exportar Datos</h3>
-      <p className="text-xs text-gray-500">Descarga los datos de tu hogar en formato JSON.</p>
+      <p className="text-xs text-gray-500">Descarga los datos de tu hogar en formato CSV (compatible con Excel).</p>
 
       <div className="grid grid-cols-2 gap-3">
         {([
-          { type: 'tasks', label: 'Tareas + Historial' },
-          { type: 'expenses', label: 'Gastos + Recurrentes' },
+          { type: 'tasks', label: 'Tareas' },
+          { type: 'expenses', label: 'Gastos' },
           { type: 'maintenance', label: 'Mantenimientos' },
           { type: 'all', label: 'Todo' },
         ] as const).map(({ type, label }) => (
@@ -445,7 +444,7 @@ function ExportSection({ homeId }: { homeId?: string }) {
             key={type}
             onClick={() => handleExport(type)}
             disabled={isExporting}
-            className="rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 text-left"
+            className="rounded-lg border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 text-left dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
           >
             <Download className="h-4 w-4 mb-1 text-gray-400" />
             {label}
