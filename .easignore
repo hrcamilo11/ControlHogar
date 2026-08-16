@@ -1,0 +1,9 @@
+.git
+.turbo
+packages/web/node_modules
+packages/web/dist
+packages/supabase/supabase/.branches
+aidlc-docs
+.kiro
+.vscode
+.github

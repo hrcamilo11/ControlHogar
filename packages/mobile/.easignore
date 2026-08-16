@@ -1,0 +1,6 @@
+.git
+node_modules
+.turbo
+__tests__
+*.test.ts
+*.test.tsx

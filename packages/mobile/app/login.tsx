@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native'
 import { supabase } from '../src/lib/supabase'
+import * as Linking from 'expo-linking'
+import { Ionicons } from '@expo/vector-icons'
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [mode, setMode] = useState<'login' | 'register'>('login')
 
   const handleSubmit = async () => {
@@ -26,6 +29,34 @@ export default function LoginScreen() {
     }
 
     setIsLoading(false)
+  }
+
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true)
+    try {
+      const redirectUrl = Linking.createURL('/(tabs)')
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      })
+
+      if (error) {
+        Alert.alert('Error', error.message)
+        return
+      }
+
+      if (data?.url) {
+        await Linking.openURL(data.url)
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'No se pudo iniciar con Google')
+    } finally {
+      setIsGoogleLoading(false)
+    }
   }
 
   return (
@@ -60,6 +91,25 @@ export default function LoginScreen() {
           >
             <Text style={styles.buttonText}>
               {isLoading ? 'Cargando...' : mode === 'login' ? 'Iniciar sesión' : 'Registrarse'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>o</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Google OAuth */}
+          <TouchableOpacity
+            style={[styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
+            onPress={handleGoogleLogin}
+            disabled={isGoogleLoading}
+          >
+            <Ionicons name="logo-google" size={20} color="#374151" />
+            <Text style={styles.googleButtonText}>
+              {isGoogleLoading ? 'Abriendo...' : 'Continuar con Google'}
             </Text>
           </TouchableOpacity>
 
@@ -98,5 +148,20 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 4 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#e5e7eb' },
+  dividerText: { paddingHorizontal: 12, fontSize: 13, color: '#9ca3af' },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  googleButtonText: { fontSize: 15, fontWeight: '500', color: '#374151' },
   toggleText: { textAlign: 'center', color: '#2563eb', fontSize: 14, marginTop: 8 },
 })
