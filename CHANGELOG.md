@@ -199,12 +199,12 @@
 
 ### Prioridad 4: Mobile
 
-- [ ] **Setup Expo + React Native**: proyecto con shared package
-- [ ] **Pantallas nativas**: login, dashboard, tareas, finanzas, mantenimiento
+- [x] **Setup Expo + React Native**: proyecto con shared package, metro config, monorepo
+- [x] **Pantallas nativas**: login, resumen, actividades (con filtro tipo), finanzas, más/configuración
 - [ ] **Push notifications**: FCM (Android) + APNs (iOS)
-- [ ] **Build APK**: EAS Build para Android
+- [x] **Build APK**: EAS Build configurado (perfil preview = APK, production = AAB)
 - [ ] **Build IPA**: EAS Build para iOS (requiere Apple Developer $99/año)
-- [ ] **Deep linking**: abrir invitaciones desde la app mobile
+- [x] **Deep linking**: pantalla invite/[token] para aceptar invitaciones desde la app
 
 ### Prioridad 5: Infraestructura
 
