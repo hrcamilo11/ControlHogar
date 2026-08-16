@@ -43,7 +43,22 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <App />
           <ConnectionIndicator />
-          <Toaster position="top-right" />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: 'var(--toast-bg, #fff)',
+                color: 'var(--toast-color, #1f2937)',
+                border: '1px solid var(--toast-border, #e5e7eb)',
+              },
+              success: {
+                iconTheme: { primary: '#10b981', secondary: '#fff' },
+              },
+              error: {
+                iconTheme: { primary: '#ef4444', secondary: '#fff' },
+              },
+            }}
+          />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
