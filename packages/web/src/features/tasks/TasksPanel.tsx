@@ -10,6 +10,7 @@ import { TaskComments } from './TaskComments'
 import { Pencil, Trash2, Pause, Play, Check, Loader2, Camera, MessageCircle, Wrench } from 'lucide-react'
 import { undoableDelete } from '@/lib/undoableAction'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { SelectButton } from '@/components/SelectButton'
 
 interface Task {
   id: string
@@ -280,11 +281,17 @@ export function TasksPanel({ homeId }: { homeId: string }) {
                 )
               })}
             </div>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-              <option value="date">Ordenar: Fecha</option>
-              <option value="title">Ordenar: Título</option>
-              <option value="frequency">Ordenar: Frecuencia</option>
-            </select>
+            <SelectButton
+              value={sortBy}
+              onChange={(v) => setSortBy(v as SortOption)}
+              title="Ordenar por"
+              options={[
+                { key: 'date', label: 'Fecha' },
+                { key: 'title', label: 'Título' },
+                { key: 'frequency', label: 'Frecuencia' },
+              ]}
+              size="sm"
+            />
           </div>
 
           {showForm && (
@@ -347,12 +354,17 @@ function TaskHistory({ homeId, members }: { homeId: string; members: Member[] })
       <h3 className="text-lg font-semibold text-gray-900">Historial de Completaciones</h3>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-gray-500">Filtrar por:</span>
-        <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-          <option value="">Todos</option>
-          {members.map((m) => (
-            <option key={m.user_id} value={m.user_id}>{m.profiles?.display_name}</option>
-          ))}
-        </select>
+        <SelectButton
+          value={filterUser}
+          onChange={(v) => setFilterUser(v)}
+          title="Filtrar por miembro"
+          placeholder="Todos"
+          options={[
+            { key: '', label: 'Todos' },
+            ...members.map((m) => ({ key: m.user_id, label: m.profiles?.display_name ?? '?' })),
+          ]}
+          size="sm"
+        />
       </div>
       {!history?.length && <p className="text-sm text-gray-500">No hay completaciones registradas.</p>}
       <div className="space-y-1">
@@ -794,14 +806,20 @@ function EditTaskForm({ task, members, homeId, onSaved, onCancel }: {
       <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500" maxLength={200} />
       <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={1000} placeholder="Descripción (opcional)" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
 
-      <select value={frequencyType} onChange={(e) => setFrequencyType(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-        <option value="once">Una vez</option>
-        <option value="daily">Diaria</option>
-        <option value="weekly">Semanal</option>
-        <option value="biweekly">Quincenal</option>
-        <option value="monthly">Mensual</option>
-        <option value="custom">Personalizada (cada X días)</option>
-      </select>
+      <SelectButton
+        value={frequencyType}
+        onChange={(v) => setFrequencyType(v)}
+        title="Frecuencia"
+        options={[
+          { key: 'once', label: 'Una vez' },
+          { key: 'daily', label: 'Diaria' },
+          { key: 'weekly', label: 'Semanal' },
+          { key: 'biweekly', label: 'Quincenal' },
+          { key: 'monthly', label: 'Mensual' },
+          { key: 'custom', label: 'Personalizada (cada X días)' },
+        ]}
+        className="w-full"
+      />
 
       {/* Custom: every X days + time */}
       {frequencyType === 'custom' && (
@@ -1123,13 +1141,20 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
       {/* Frequency selector (tasks only — maintenance is always 'once') */}
       {taskType === 'task' && (
       <div className="space-y-3">
-        <select value={frequencyType} onChange={(e) => setFrequencyType(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" data-testid="task-form-frequency">
-          <option value="once">Una vez</option>
-          <option value="daily">Diaria</option>
-          <option value="weekly">Semanal</option>
-          <option value="biweekly">Quincenal</option>
-          <option value="monthly">Mensual</option>
-        </select>
+        <SelectButton
+          value={frequencyType}
+          onChange={(v) => setFrequencyType(v)}
+          title="Frecuencia"
+          options={[
+            { key: 'once', label: 'Una vez' },
+            { key: 'daily', label: 'Diaria' },
+            { key: 'weekly', label: 'Semanal' },
+            { key: 'biweekly', label: 'Quincenal' },
+            { key: 'monthly', label: 'Mensual' },
+          ]}
+          className="w-full"
+          data-testid="task-form-frequency"
+        />
 
         {/* Once: date + time */}
         {frequencyType === 'once' && (

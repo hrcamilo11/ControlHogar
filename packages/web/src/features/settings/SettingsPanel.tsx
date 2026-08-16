@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { Moon, Sun, Monitor, User, Lock, Home, Tag, Download, LogOut, Crown, DoorOpen, Globe, UserPlus } from 'lucide-react'
 import { accentPresets, applyAccentColor } from '@/lib/accentColors'
 import { useConfirm, useDialog } from '@/components/ConfirmDialog'
+import { SelectButton } from '@/components/SelectButton'
 
 type Theme = 'light' | 'dark' | 'amoled' | 'system'
 type SettingsSection = 'appearance' | 'profile' | 'home' | 'members' | 'categories' | 'export'
@@ -298,16 +299,22 @@ function HomeSection({ homeId }: { homeId?: string }) {
           </div>
           <div>
             <label className="text-xs text-gray-600 block mb-1">Moneda</label>
-            <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-              <option value="COP">COP - Peso Colombiano</option>
-              <option value="USD">USD - Dólar</option>
-              <option value="EUR">EUR - Euro</option>
-              <option value="MXN">MXN - Peso Mexicano</option>
-              <option value="ARS">ARS - Peso Argentino</option>
-              <option value="CLP">CLP - Peso Chileno</option>
-              <option value="PEN">PEN - Sol Peruano</option>
-              <option value="BRL">BRL - Real Brasileño</option>
-            </select>
+            <SelectButton
+              value={currency}
+              onChange={(v) => setCurrency(v)}
+              title="Moneda del hogar"
+              options={[
+                { key: 'COP', label: 'COP - Peso Colombiano' },
+                { key: 'USD', label: 'USD - Dólar' },
+                { key: 'EUR', label: 'EUR - Euro' },
+                { key: 'MXN', label: 'MXN - Peso Mexicano' },
+                { key: 'ARS', label: 'ARS - Peso Argentino' },
+                { key: 'CLP', label: 'CLP - Peso Chileno' },
+                { key: 'PEN', label: 'PEN - Sol Peruano' },
+                { key: 'BRL', label: 'BRL - Real Brasileño' },
+              ]}
+              className="w-full"
+            />
           </div>
           <button onClick={handleSave} disabled={isUpdating} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">Guardar cambios</button>
         </div>
@@ -573,11 +580,17 @@ function MembersSection({ homeId }: { homeId?: string }) {
       {showInvite && !inviteLink && (
         <form onSubmit={handleInvite} className="rounded-lg border border-gray-200 bg-white p-4 space-y-3 dark:bg-gray-800 dark:border-gray-700">
           <input type="email" placeholder="Email (opcional)" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-          <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-            <option value="member">Miembro</option>
-            <option value="guest">Invitado</option>
-            <option value="admin">Admin</option>
-          </select>
+          <SelectButton
+            value={inviteRole}
+            onChange={(v) => setInviteRole(v)}
+            title="Rol del invitado"
+            options={[
+              { key: 'member', label: 'Miembro', description: 'Puede crear y editar' },
+              { key: 'guest', label: 'Invitado', description: 'Solo puede completar tareas asignadas' },
+              { key: 'admin', label: 'Admin', description: 'Acceso completo, puede gestionar miembros' },
+            ]}
+            className="w-full"
+          />
           <div className="flex gap-2">
             <button type="submit" disabled={isInviting} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">{isInviting ? 'Creando...' : 'Generar Invitación'}</button>
             <button type="button" onClick={() => setShowInvite(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">Cancelar</button>
@@ -633,11 +646,17 @@ function MembersSection({ homeId }: { homeId?: string }) {
             <div className="flex items-center gap-2">
               {canManage && member.role !== 'owner' && member.user_id !== session?.user.id ? (
                 <>
-                  <select value={member.role} onChange={(e) => handleChangeRole(member.user_id, e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-                    <option value="admin">Admin</option>
-                    <option value="member">Miembro</option>
-                    <option value="guest">Invitado</option>
-                  </select>
+                  <SelectButton
+                    value={member.role}
+                    onChange={(v) => handleChangeRole(member.user_id, v)}
+                    title="Cambiar rol"
+                    options={[
+                      { key: 'admin', label: 'Admin', description: 'Gestiona miembros y configuración' },
+                      { key: 'member', label: 'Miembro', description: 'Crea y edita contenido' },
+                      { key: 'guest', label: 'Invitado', description: 'Solo completa tareas asignadas' },
+                    ]}
+                    size="sm"
+                  />
                   <button onClick={() => handleRemoveMember(member.user_id, member.profiles?.display_name)} className="text-xs text-red-500 hover:text-red-700">✕</button>
                 </>
               ) : (

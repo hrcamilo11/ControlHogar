@@ -8,6 +8,7 @@ import { RecurringPayments } from './RecurringPayments'
 import { BudgetPanel } from './BudgetPanel'
 import { Pencil, Trash2, Paperclip, Banknote } from 'lucide-react'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { SelectButton } from '@/components/SelectButton'
 
 interface Expense {
   id: string
@@ -120,14 +121,28 @@ function ExpensesView({ homeId }: { homeId: string }) {
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
-        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-          <option value="">Todas las categorías</option>
-          {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select value={filterPaidBy} onChange={(e) => setFilterPaidBy(e.target.value)} className="rounded border border-gray-300 px-2 py-1 text-xs">
-          <option value="">Todos los pagadores</option>
-          {members?.map((m) => <option key={m.user_id} value={m.user_id}>{m.profiles?.display_name}</option>)}
-        </select>
+        <SelectButton
+          value={filterCategory}
+          onChange={(v) => setFilterCategory(v)}
+          title="Filtrar por categoría"
+          placeholder="Todas las categorías"
+          options={[
+            { key: '', label: 'Todas las categorías' },
+            ...(categories?.map((c) => ({ key: c.id, label: c.name })) ?? []),
+          ]}
+          size="sm"
+        />
+        <SelectButton
+          value={filterPaidBy}
+          onChange={(v) => setFilterPaidBy(v)}
+          title="Filtrar por pagador"
+          placeholder="Todos los pagadores"
+          options={[
+            { key: '', label: 'Todos los pagadores' },
+            ...(members?.map((m) => ({ key: m.user_id, label: m.profiles?.display_name ?? '?' })) ?? []),
+          ]}
+          size="sm"
+        />
         {(filterCategory || filterPaidBy) && (
           <span className="text-xs text-gray-500">Total: ${totalFiltered.toLocaleString('es-CO')}</span>
         )}
@@ -381,24 +396,42 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
 
       <div className="grid grid-cols-2 gap-2">
         <input type="number" required min="0.01" step="0.01" placeholder="Monto" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="">Sin categoría</option>
-          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <SelectButton
+          value={categoryId}
+          onChange={(v) => setCategoryId(v)}
+          title="Categoría"
+          placeholder="Sin categoría"
+          options={[
+            { key: '', label: 'Sin categoría' },
+            ...categories.map((c) => ({ key: c.id, label: c.name })),
+          ]}
+          className="w-full"
+        />
       </div>
 
       {/* Associate with task */}
-      <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-        <option value="">Sin tarea asociada</option>
-        {homeTasks?.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-      </select>
+      <SelectButton
+        value={taskId}
+        onChange={(v) => setTaskId(v)}
+        title="Asociar a tarea"
+        placeholder="Sin tarea asociada"
+        options={[
+          { key: '', label: 'Sin tarea asociada' },
+          ...(homeTasks?.map((t) => ({ key: t.id, label: t.title })) ?? []),
+        ]}
+        className="w-full"
+      />
 
       {/* Who paid */}
       <div>
         <label className="text-xs text-gray-600 mb-1 block">¿Quién pagó?</label>
-        <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm w-full">
-          {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.profiles?.display_name}{m.user_id === session?.user.id ? ' (yo)' : ''}</option>)}
-        </select>
+        <SelectButton
+          value={paidBy}
+          onChange={(v) => setPaidBy(v)}
+          title="¿Quién pagó?"
+          options={members.map((m) => ({ key: m.user_id, label: `${m.profiles?.display_name}${m.user_id === session?.user.id ? ' (yo)' : ''}` }))}
+          className="w-full"
+        />
       </div>
 
       {/* Split type */}
