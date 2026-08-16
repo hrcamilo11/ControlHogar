@@ -27,6 +27,14 @@
 - Filtro por tipo (Todo / Tareas / Mantenim.) en la lista
 - Badge de tipo "Mantenim." en tarjetas de mantenimiento
 
+#### UX y Pulido
+- Onboarding: tutorial guiado de 5 pasos (Tareas, Finanzas, Miembros, Control, Configuración)
+- Atajos de teclado: Ctrl+K enfoca búsqueda, Ctrl+N navega a tareas, Escape cierra
+- Toast con undo: eliminar tarea da 5 segundos para deshacer (optimistic + rollback)
+- Tema personalizable: 6 colores de acento seleccionables (CSS custom properties)
+- Lista de compras en Inicio: widget rápido para agregar y marcar items sin ir a Finanzas
+- Búsqueda global actualizada: ahora busca en tareas de tipo mantenimiento (no en tabla vieja)
+
 #### Limpieza
 - Eliminado `MaintenancePanel.tsx` (funcionalidad absorbida por TasksPanel)
 - Eliminado `ActivityFeed.tsx` (reemplazado por UnifiedNotifications)
@@ -183,11 +191,11 @@
 
 ### Prioridad 3: UX y Pulido
 
-- [ ] **Onboarding**: tutorial guiado para nuevos usuarios
-- [ ] **Atajos de teclado**: Ctrl+K búsqueda, Ctrl+N nueva tarea
-- [ ] **Toast con undo**: al eliminar algo, poder deshacer en 5 segundos
-- [ ] **Tema personalizable**: colores de acento custom (no solo azul)
-- [ ] **Mover lista de compras**: sacarla de Finanzas, hacerla accesible desde Inicio o como tipo de tarea
+- [x] **Onboarding**: tutorial guiado de 5 pasos para nuevos usuarios (modal con navegación)
+- [x] **Atajos de teclado**: Ctrl+K búsqueda (enfoca input), Ctrl+N nueva tarea (navega a tab)
+- [x] **Toast con undo**: al eliminar tarea, 5 segundos para deshacer
+- [x] **Tema personalizable**: 6 colores de acento (azul, violeta, rosa, esmeralda, naranja, teal) via CSS variables
+- [x] **Mover lista de compras**: accesible desde Inicio como widget rápido (agregar, marcar, ver todo)
 
 ### Prioridad 4: Mobile
 

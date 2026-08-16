@@ -8,10 +8,12 @@ import { SearchBar } from '@/components/SearchBar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { SkipToContent } from '@/components/AccessibilityHelpers'
 import { ListSkeleton } from '@/components/Skeleton'
+import { Onboarding, useOnboarding } from '@/components/Onboarding'
 import { NotificationBadge } from '../notifications/NotificationsPanel'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { Home, ClipboardList, Wallet, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings, Calendar, BellRing, Check } from 'lucide-react'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
+import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 
@@ -38,6 +40,14 @@ export function DashboardPage() {
 
   useRealtimeSync(activeHome?.id ?? null)
 
+  // Keyboard shortcut: Ctrl+N → go to tasks tab (form opens from there)
+  useKeyboardShortcuts({
+    onNewTask: () => setActiveTab('tasks'),
+  })
+
+  // Onboarding for new users
+  const { showOnboarding, completeOnboarding } = useOnboarding()
+
   if (homesLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -60,6 +70,7 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {showOnboarding && <Onboarding onComplete={completeOnboarding} />}
       <SkipToContent />
       {/* Header */}
       <header className="border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800" role="banner">
@@ -139,6 +150,7 @@ export function DashboardPage() {
               <div className="space-y-6">
                 <SummaryCards homeId={activeHome.id} />
                 <RecentTasks homeId={activeHome.id} onViewAll={() => setActiveTab('tasks')} />
+                <QuickShoppingList homeId={activeHome.id} onViewAll={() => setActiveTab('finance')} />
               </div>
             )}
             {activeTab === 'tasks' && <TasksPanel homeId={activeHome.id} />}
@@ -239,6 +251,83 @@ function RecentTasks({ homeId, onViewAll }: { homeId: string; onViewAll: () => v
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// Quick shopping list widget on Home tab
+function QuickShoppingList({ homeId, onViewAll }: { homeId: string; onViewAll: () => void }) {
+  const { session } = useAuth()
+  const queryClient = useQueryClient()
+  const [newItem, setNewItem] = useState('')
+
+  const { data: items } = useQuery({
+    queryKey: ['shopping-quick', homeId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shopping_items')
+        .select('id, name, is_bought')
+        .eq('home_id', homeId)
+        .eq('is_bought', false)
+        .order('created_at', { ascending: false })
+        .limit(5)
+      if (error) throw error
+      return data as { id: string; name: string; is_bought: boolean }[]
+    },
+  })
+
+  const handleAdd = async () => {
+    if (!newItem.trim() || !session) return
+    await supabase.from('shopping_items').insert({ home_id: homeId, name: newItem.trim(), added_by: session.user.id })
+    setNewItem('')
+    queryClient.invalidateQueries({ queryKey: ['shopping-quick', homeId] })
+    queryClient.invalidateQueries({ queryKey: ['shopping', homeId] })
+  }
+
+  const handleToggle = async (id: string) => {
+    await supabase.from('shopping_items').update({ is_bought: true, bought_at: new Date().toISOString() }).eq('id', id)
+    queryClient.invalidateQueries({ queryKey: ['shopping-quick', homeId] })
+    queryClient.invalidateQueries({ queryKey: ['shopping', homeId] })
+  }
+
+  if (!items?.length && !newItem) return null
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Lista de compras</h3>
+        <button onClick={onViewAll} className="text-xs text-primary-600 font-medium hover:text-primary-800">
+          Ver todo →
+        </button>
+      </div>
+
+      {/* Quick add */}
+      <div className="flex gap-2 mb-3">
+        <input
+          type="text"
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
+          placeholder="Agregar item..."
+          className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none"
+        />
+        <button onClick={handleAdd} disabled={!newItem.trim()} className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">+</button>
+      </div>
+
+      {/* Items */}
+      <div className="space-y-1">
+        {items?.map((item) => (
+          <div key={item.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 bg-gray-50 dark:bg-gray-700/50">
+            <span className="text-sm text-gray-700 dark:text-gray-300">{item.name}</span>
+            <button
+              onClick={() => handleToggle(item.id)}
+              className="flex h-5 w-5 items-center justify-center rounded border border-gray-300 text-gray-400 hover:bg-green-500 hover:text-white hover:border-green-500 transition-colors"
+            >
+              <Check className="h-3 w-3" strokeWidth={3} />
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )

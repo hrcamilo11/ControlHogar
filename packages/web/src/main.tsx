@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast'
 import { App } from './App'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { ConnectionIndicator } from './components/ConnectionIndicator'
+import { loadSavedAccent } from './lib/accentColors'
 import './index.css'
 
 // Apply saved theme on load
@@ -15,6 +16,9 @@ if (savedTheme === 'amoled') {
 } else if (savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
   document.documentElement.classList.add('dark')
 }
+
+// Apply saved accent color
+loadSavedAccent()
 
 const queryClient = new QueryClient({
   defaultOptions: {

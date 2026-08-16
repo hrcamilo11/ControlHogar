@@ -15,6 +15,24 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
   const [results, setResults] = useState<SearchResult[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Ctrl+K shortcut to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        inputRef.current?.focus()
+        setIsOpen(true)
+      }
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false)
+        inputRef.current?.blur()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen])
 
   useEffect(() => {
     if (query.length < 2) {
@@ -62,15 +80,17 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
         })
       })
 
-      // Search maintenance
-      const { data: maintenances } = await supabase
-        .from('maintenances')
+      // Search maintenance-type tasks
+      const { data: maintenanceTasks } = await supabase
+        .from('tasks')
         .select('id, title, status')
         .eq('home_id', homeId)
+        .eq('task_type', 'maintenance')
+        .eq('is_active', true)
         .ilike('title', `%${query}%`)
         .limit(5)
 
-      maintenances?.forEach((m) => {
+      maintenanceTasks?.forEach((m) => {
         searchResults.push({
           id: m.id,
           type: 'maintenance',
@@ -100,8 +120,8 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
     const tabMap: Record<string, string> = {
       task: 'tasks',
       expense: 'finance',
-      maintenance: 'maintenance',
-      member: 'members',
+      maintenance: 'tasks',
+      member: 'hogar',
     }
     onNavigate(tabMap[result.type] ?? 'tasks')
     setQuery('')
@@ -112,14 +132,16 @@ export function SearchBar({ homeId, onNavigate }: { homeId: string; onNavigate: 
     <div ref={ref} className="relative w-full max-w-md">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
       <input
+        ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => { setQuery(e.target.value); setIsOpen(true) }}
         onFocus={() => setIsOpen(true)}
-        placeholder="Buscar tareas, gastos, mantenimientos..."
-        className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        placeholder="Buscar... (Ctrl+K)"
+        className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-16 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
         data-testid="global-search"
       />
+      <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:inline-flex items-center rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-xs text-gray-400 font-mono dark:bg-gray-700 dark:border-gray-600">⌘K</kbd>
 
       {isOpen && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border border-gray-200 bg-white shadow-lg">

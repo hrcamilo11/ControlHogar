@@ -8,6 +8,7 @@ import { RotationStats, getNextFairAssignee } from './TaskRotation'
 import { SubtaskList } from './SubtaskList'
 import { TaskComments } from './TaskComments'
 import { Pencil, Trash2, Pause, Play, Check, Loader2, Camera, MessageCircle, Wrench } from 'lucide-react'
+import { undoableDelete } from '@/lib/undoableAction'
 
 interface Task {
   id: string
@@ -394,10 +395,22 @@ function TaskCard({
     .filter(Boolean)
 
   const handleDelete = async () => {
-    if (!confirm('¿Eliminar esta tarea?\n\nEl historial de completaciones se conservará.')) return
-    await supabase.from('tasks').update({ is_active: false }).eq('id', task.id)
-    queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
-    toast.success('Tarea eliminada')
+    if (!confirm('¿Eliminar esta tarea?')) return
+
+    // Optimistic: hide immediately
+    queryClient.setQueryData<Task[]>(['tasks', homeId], (old) => old?.filter((t) => t.id !== task.id))
+
+    undoableDelete({
+      message: `"${task.title}" eliminada`,
+      onConfirm: async () => {
+        await supabase.from('tasks').update({ is_active: false }).eq('id', task.id)
+        queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
+      },
+      onUndo: () => {
+        // Restore the task in the cache
+        queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
+      },
+    })
   }
 
   const handleTogglePause = async () => {

@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { Moon, Sun, Monitor, User, Lock, Home, Tag, Download, LogOut, Crown, DoorOpen, Globe } from 'lucide-react'
+import { accentPresets, applyAccentColor } from '@/lib/accentColors'
 
 type Theme = 'light' | 'dark' | 'amoled' | 'system'
 type SettingsSection = 'appearance' | 'profile' | 'home' | 'categories' | 'export'
@@ -51,8 +52,10 @@ export function SettingsPanel({ homeId }: { homeId?: string }) {
 // ─── Appearance ───
 function AppearanceSection() {
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) ?? 'system')
+  const [accent, setAccent] = useState(() => localStorage.getItem('accent-color') ?? 'blue')
 
   useEffect(() => { applyTheme(theme); localStorage.setItem('theme', theme) }, [theme])
+  useEffect(() => { applyAccentColor(accent); localStorage.setItem('accent-color', accent) }, [accent])
 
   return (
     <section className="space-y-6">
@@ -60,7 +63,7 @@ function AppearanceSection() {
 
       {/* Theme */}
       <div className="space-y-2">
-        <label className="text-sm text-gray-600">Tema</label>
+        <label className="text-sm text-gray-600 dark:text-gray-400">Tema</label>
         <div className="flex gap-3 flex-wrap">
           {([
             { value: 'light', label: 'Claro', icon: Sun },
@@ -71,6 +74,23 @@ function AppearanceSection() {
             <button key={value} onClick={() => setTheme(value)} className={`flex flex-col items-center gap-2 rounded-xl border-2 px-5 py-3 transition-all ${theme === value ? 'border-primary-500 bg-primary-50 dark:bg-transparent' : 'border-gray-200 hover:border-gray-300 dark:border-gray-700'}`}>
               <Icon className={`h-5 w-5 ${theme === value ? 'text-primary-600' : 'text-gray-500'}`} />
               <span className={`text-xs font-medium ${theme === value ? 'text-primary-700' : 'text-gray-600'}`}>{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Accent color */}
+      <div className="space-y-2">
+        <label className="text-sm text-gray-600 dark:text-gray-400">Color de acento</label>
+        <div className="flex gap-2 flex-wrap">
+          {accentPresets.map((preset) => (
+            <button
+              key={preset.key}
+              onClick={() => setAccent(preset.key)}
+              className={`flex items-center gap-2 rounded-full border-2 px-3 py-1.5 text-xs font-medium transition-all ${accent === preset.key ? 'border-gray-900 dark:border-white shadow-sm' : 'border-transparent hover:border-gray-300'}`}
+            >
+              <span className="h-4 w-4 rounded-full" style={{ backgroundColor: preset.preview }} />
+              {preset.name}
             </button>
           ))}
         </div>
