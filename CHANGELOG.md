@@ -201,9 +201,9 @@
 
 - [x] **Setup Expo + React Native**: proyecto con shared package, metro config, monorepo
 - [x] **Pantallas nativas**: login, resumen, actividades (con filtro tipo), finanzas, más/configuración
-- [ ] **Push notifications**: FCM (Android) + APNs (iOS)
+- [x] **Push notifications**: Expo Push API + tabla push_tokens + Edge Function send-push + trigger automático
 - [x] **Build APK**: EAS Build configurado (perfil preview = APK, production = AAB)
-- [ ] **Build IPA**: EAS Build para iOS (requiere Apple Developer $99/año)
+- [ ] ~~**Build IPA**~~: omitido (requiere Apple Developer $99/año)
 - [x] **Deep linking**: pantalla invite/[token] para aceptar invitaciones desde la app
 
 ### Prioridad 5: Infraestructura

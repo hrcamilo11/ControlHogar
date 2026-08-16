@@ -15,6 +15,8 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey)
 
     const now = new Date().toISOString()
+    // Window to avoid duplicates: don't re-notify if we already notified in the last 2 hours
+    const dedupeWindow = new Date(Date.now() - 2 * 3600000).toISOString()
     let tasksNotified = 0
     let paymentsNotified = 0
 
@@ -29,17 +31,32 @@ serve(async (req) => {
     for (const task of overdueTasks ?? []) {
       const hoursOverdue = Math.floor((Date.now() - new Date(task.next_due_date!).getTime()) / 3600000)
 
-      // Only notify if overdue > 1 hour (avoid spamming)
-      if (hoursOverdue < 1) continue
+      // Skip if just barely overdue (less than 5 min)
+      if (hoursOverdue < 0) continue
+      const minsOverdue = Math.floor((Date.now() - new Date(task.next_due_date!).getTime()) / 60000)
+      if (minsOverdue < 5) continue
 
-      // Notify assigned users
       for (const assignment of task.task_assignments ?? []) {
+        // Check if we already notified this user about this task recently
+        const { data: existing } = await supabase
+          .from('app_notifications')
+          .select('id')
+          .eq('user_id', assignment.user_id)
+          .eq('type', 'task.overdue')
+          .gte('created_at', dedupeWindow)
+          .contains('data', { task_id: task.id })
+          .limit(1)
+
+        if (existing && existing.length > 0) continue // Already notified recently
+
+        const timeLabel = hoursOverdue >= 1 ? `${hoursOverdue}h` : `${minsOverdue} min`
+
         await supabase.from('app_notifications').insert({
           user_id: assignment.user_id,
           home_id: task.home_id,
           type: 'task.overdue',
           title: 'Tarea atrasada',
-          body: `"${task.title}" está atrasada por ${hoursOverdue}h`,
+          body: `"${task.title}" está atrasada por ${timeLabel}`,
           data: { task_id: task.id, hours_overdue: hoursOverdue },
         })
         tasksNotified++
@@ -47,7 +64,6 @@ serve(async (req) => {
     }
 
     // ─── Check upcoming payments (due in 3 days or less) ───
-    const threeDaysFromNow = new Date(Date.now() + 3 * 86400000)
     const currentDay = new Date().getDate()
 
     const { data: upcomingPayments } = await supabase
@@ -58,13 +74,27 @@ serve(async (req) => {
       .lte('due_day', currentDay + 3)
 
     for (const payment of upcomingPayments ?? []) {
-      // Get home members to notify
       const { data: members } = await supabase
         .from('home_members')
         .select('user_id')
         .eq('home_id', payment.home_id)
 
       for (const member of members ?? []) {
+        // Dedupe: only notify once per day about this payment
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+
+        const { data: existing } = await supabase
+          .from('app_notifications')
+          .select('id')
+          .eq('user_id', member.user_id)
+          .eq('type', 'payment.upcoming')
+          .gte('created_at', todayStart.toISOString())
+          .contains('data', { payment_id: payment.id })
+          .limit(1)
+
+        if (existing && existing.length > 0) continue
+
         await supabase.from('app_notifications').insert({
           user_id: member.user_id,
           home_id: payment.home_id,
@@ -77,7 +107,7 @@ serve(async (req) => {
       }
     }
 
-    // ─── Send emails for tasks overdue > 24h ───
+    // ─── Send emails for tasks overdue > 24h (once per day) ───
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     if (resendApiKey) {
       const { data: severelyOverdue } = await supabase
@@ -92,6 +122,20 @@ serve(async (req) => {
           const profile = (assignment as any).profiles
           if (!profile?.email) continue
 
+          // Only send email once per day per task
+          const todayStart = new Date()
+          todayStart.setHours(0, 0, 0, 0)
+          const { data: emailSent } = await supabase
+            .from('app_notifications')
+            .select('id')
+            .eq('user_id', assignment.user_id)
+            .eq('type', 'task.overdue.email')
+            .gte('created_at', todayStart.toISOString())
+            .contains('data', { task_id: task.id })
+            .limit(1)
+
+          if (emailSent && emailSent.length > 0) continue
+
           await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resendApiKey}` },
@@ -102,11 +146,21 @@ serve(async (req) => {
               html: `<p>Hola ${profile.display_name},</p><p>La tarea <strong>"${task.title}"</strong> está atrasada por más de 24 horas.</p><p>— ControlHogar</p>`,
             }),
           })
+
+          // Mark email as sent
+          await supabase.from('app_notifications').insert({
+            user_id: assignment.user_id,
+            home_id: task.home_id,
+            type: 'task.overdue.email',
+            title: 'Email enviado',
+            body: `Email de recordatorio enviado para "${task.title}"`,
+            data: { task_id: task.id },
+          })
         }
       }
     }
 
-    console.log(`✅ Check complete: ${tasksNotified} task notifications, ${paymentsNotified} payment notifications`)
+    console.log(`Check complete: ${tasksNotified} task, ${paymentsNotified} payment notifications`)
 
     return new Response(
       JSON.stringify({ success: true, tasksNotified, paymentsNotified }),
