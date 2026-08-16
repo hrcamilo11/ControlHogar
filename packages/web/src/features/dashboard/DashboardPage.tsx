@@ -10,7 +10,7 @@ import { SkipToContent } from '@/components/AccessibilityHelpers'
 import { ListSkeleton } from '@/components/Skeleton'
 import { NotificationBadge } from '../notifications/NotificationsPanel'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings, Calendar, BellRing, Check } from 'lucide-react'
+import { Home, ClipboardList, Wallet, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings, Calendar, BellRing, Check } from 'lucide-react'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
@@ -18,15 +18,11 @@ import toast from 'react-hot-toast'
 // Lazy load heavy panels
 const TasksPanel = lazy(() => import('../tasks/TasksPanel').then((m) => ({ default: m.TasksPanel })))
 const FinancePanel = lazy(() => import('../finance/FinancePanel').then((m) => ({ default: m.FinancePanel })))
-const MaintenancePanel = lazy(() => import('../maintenance/MaintenancePanel').then((m) => ({ default: m.MaintenancePanel })))
-const ActivityFeed = lazy(() => import('../activity/ActivityFeed').then((m) => ({ default: m.ActivityFeed })))
-const NotificationsPanel = lazy(() => import('../notifications/NotificationsPanel').then((m) => ({ default: m.NotificationsPanel })))
 const UnifiedNotifications = lazy(() => import('../notifications/UnifiedNotifications').then((m) => ({ default: m.UnifiedNotifications })))
 const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
 const GlobalCalendar = lazy(() => import('./GlobalCalendar').then((m) => ({ default: m.GlobalCalendar })))
 
 type Tab = 'home' | 'tasks' | 'finance' | 'hogar' | 'more'
-type HogarSubTab = 'maintenance' | 'members'
 type MoreSubTab = 'notifications' | 'stats' | 'calendar' | 'settings'
 
 export function DashboardPage() {
@@ -34,7 +30,6 @@ export function DashboardPage() {
   const { data: homes, isLoading: homesLoading } = useHomes()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<Tab>('home')
-  const [hogarSubTab, setHogarSubTab] = useState<HogarSubTab>('maintenance')
   const [moreSubTab, setMoreSubTab] = useState<MoreSubTab>('notifications')
   const [activeHomeIndex, setActiveHomeIndex] = useState(0)
 
@@ -59,7 +54,7 @@ export function DashboardPage() {
     { key: 'home', label: 'Inicio', icon: <Home className="h-4 w-4" /> },
     { key: 'tasks', label: 'Tareas', icon: <ClipboardList className="h-4 w-4" /> },
     { key: 'finance', label: 'Finanzas', icon: <Wallet className="h-4 w-4" /> },
-    { key: 'hogar', label: 'Hogar', icon: <Wrench className="h-4 w-4" /> },
+    { key: 'hogar', label: 'Hogar', icon: <Users className="h-4 w-4" /> },
     { key: 'more', label: 'Más', icon: <BarChart3 className="h-4 w-4" /> },
   ]
 
@@ -150,19 +145,7 @@ export function DashboardPage() {
             {activeTab === 'finance' && <FinancePanel homeId={activeHome.id} />}
             {activeTab === 'hogar' && (
               <div className="space-y-4">
-                {/* Hogar sub-tabs — chips style */}
-                <div className="flex items-center gap-2">
-                  {([
-                    { key: 'maintenance', label: 'Mantenimientos', icon: <Wrench className="h-3.5 w-3.5" /> },
-                    { key: 'members', label: 'Miembros', icon: <Users className="h-3.5 w-3.5" /> },
-                  ] as const).map(({ key, label, icon }) => (
-                    <button key={key} onClick={() => setHogarSubTab(key)} className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all ${hogarSubTab === key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
-                      {icon} {label}
-                    </button>
-                  ))}
-                </div>
-                {hogarSubTab === 'maintenance' && <MaintenancePanel homeId={activeHome.id} />}
-                {hogarSubTab === 'members' && <MembersPanel members={members} homeId={activeHome.id} />}
+                <MembersPanel members={members} homeId={activeHome.id} />
               </div>
             )}
             {activeTab === 'more' && (

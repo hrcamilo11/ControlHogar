@@ -7,7 +7,7 @@ import { calculateNextDueDate } from '@controlhogar/shared/src/modules/tasks/tas
 import { RotationStats, getNextFairAssignee } from './TaskRotation'
 import { SubtaskList } from './SubtaskList'
 import { TaskComments } from './TaskComments'
-import { Pencil, Trash2, Pause, Play, Check, Loader2 } from 'lucide-react'
+import { Pencil, Trash2, Pause, Play, Check, Loader2, Camera, MessageCircle, Wrench } from 'lucide-react'
 
 interface Task {
   id: string
@@ -21,6 +21,11 @@ interface Task {
   rotation_enabled: boolean
   rotation_members: string[]
   rotation_index: number
+  task_type: 'task' | 'maintenance'
+  priority: 'high' | 'medium' | 'low' | null
+  status: 'active' | 'in_progress' | 'completed'
+  completed_by: string | null
+  completed_at: string | null
   created_at: string
   task_assignments: { user_id: string }[]
 }
@@ -48,6 +53,7 @@ export function TasksPanel({ homeId }: { homeId: string }) {
   const [activeView, setActiveView] = useState<'list' | 'history'>('list')
   const [filterAssignee, setFilterAssignee] = useState<string>('all')
   const [filterDate, setFilterDate] = useState<string>('all')
+  const [filterType, setFilterType] = useState<string>('all')
   const [sortBy, setSortBy] = useState<SortOption>('date')
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const { session } = useAuth()
@@ -177,6 +183,10 @@ export function TasksPanel({ homeId }: { homeId: string }) {
 
   // Filter tasks
   const filteredTasks = tasks?.filter((task) => {
+    // Type filter
+    if (filterType === 'task' && task.task_type !== 'task') return false
+    if (filterType === 'maintenance' && task.task_type !== 'maintenance') return false
+
     // Assignee filter
     if (filterAssignee === 'all') { /* pass */ }
     else if (filterAssignee === 'unassigned') { if (task.task_assignments.length > 0) return false }
@@ -240,7 +250,15 @@ export function TasksPanel({ homeId }: { homeId: string }) {
           {/* Filters + Sort */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-500">Asignado:</span>
+              {/* Type filter */}
+              {(['all', 'task', 'maintenance'] as const).map((type) => {
+                const labels = { all: 'Todo', task: 'Tareas', maintenance: 'Mantenim.' }
+                return (
+                  <button key={type} onClick={() => setFilterType(type)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${filterType === type ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{labels[type]}</button>
+                )
+              })}
+              <span className="text-gray-300 dark:text-gray-600">|</span>
+              {/* Assignee filter */}
               {['all', session!.user.id, 'unassigned'].map((filter, i) => {
                 const labels = ['Todas', 'Mías', 'Sin asignar']
                 return (
@@ -359,7 +377,10 @@ function TaskCard({
   task: Task; members: Member[]; homeId: string; currentUserId: string; currentUserRole: string; onComplete: () => void; isCompleting: boolean; isEditing: boolean; onStartEdit: () => void; onStopEdit: () => void
 }) {
   const [showAssignEdit, setShowAssignEdit] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
+  const [newNote, setNewNote] = useState('')
   const queryClient = useQueryClient()
+  const { session } = useAuth()
 
   const isOverdue = task.next_due_date ? new Date(task.next_due_date) < new Date() : false
   const isAssignedToMe = task.task_assignments.some((a) => a.user_id === currentUserId)
@@ -402,6 +423,73 @@ function TaskCard({
     }
   }
 
+  // Maintenance status advancement
+  const handleAdvanceStatus = async () => {
+    const nextStatusMap: Record<string, string> = { active: 'in_progress', in_progress: 'completed' }
+    const next = nextStatusMap[task.status]
+    if (!next) return
+
+    const updateData: Record<string, unknown> = { status: next }
+    if (next === 'completed') {
+      updateData.completed_at = new Date().toISOString()
+      updateData.completed_by = session!.user.id
+      updateData.is_active = false
+    }
+    const { error } = await supabase.from('tasks').update(updateData).eq('id', task.id)
+    if (error) { toast.error(error.message); return }
+    queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
+    toast.success(next === 'completed' ? 'Mantenimiento completado' : 'Mantenimiento iniciado')
+  }
+
+  // Photos for maintenance
+  const { data: photos } = useQuery({
+    queryKey: ['task-photos', task.id],
+    enabled: task.task_type === 'maintenance',
+    queryFn: async () => {
+      const { data, error } = await supabase.from('task_photos').select('*').eq('task_id', task.id).order('created_at', { ascending: false })
+      if (error) return []
+      return data as { id: string; url: string; caption: string | null }[]
+    },
+  })
+
+  // Notes for maintenance
+  const { data: notes } = useQuery({
+    queryKey: ['task-notes', task.id],
+    enabled: task.task_type === 'maintenance' && showNotes,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('task_notes').select('*, profiles:user_id(display_name)').eq('task_id', task.id).order('created_at', { ascending: false })
+      if (error) return []
+      return data
+    },
+  })
+
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return
+    const { error } = await supabase.from('task_notes').insert({ task_id: task.id, user_id: session!.user.id, content: newNote.trim() })
+    if (error) { toast.error(error.message); return }
+    queryClient.invalidateQueries({ queryKey: ['task-notes', task.id] })
+    setNewNote('')
+    toast.success('Nota agregada')
+  }
+
+  const handleAddPhoto = async () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const filePath = `${task.id}/${Date.now()}-${file.name}`
+      const { error } = await supabase.storage.from('maintenance-photos').upload(filePath, file)
+      if (error) { toast.error('Error subiendo foto'); return }
+      const { data: urlData } = supabase.storage.from('maintenance-photos').getPublicUrl(filePath)
+      await supabase.from('task_photos').insert({ task_id: task.id, user_id: session!.user.id, url: urlData.publicUrl })
+      toast.success('Foto agregada')
+      queryClient.invalidateQueries({ queryKey: ['task-photos', task.id] })
+    }
+    input.click()
+  }
+
   const handleUpdateAssignees = async (userIds: string[]) => {
     // If rotation enabled and less than 2 assignees, disable rotation
     if (task.rotation_enabled && userIds.length < 2) {
@@ -436,6 +524,9 @@ function TaskCard({
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-gray-900">{task.title}</h3>
+            {task.task_type === 'maintenance' && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900 dark:text-orange-300">Mantenim.</span>}
+            {task.priority && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${task.priority === 'high' ? 'bg-red-100 text-red-700' : task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}</span>}
+            {task.status === 'in_progress' && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">En progreso</span>}
             {isOverdue && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Atrasada</span>}
             {isPaused && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">Pausada</span>}
             {task.rotation_enabled && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700">Rotación</span>}
@@ -454,7 +545,18 @@ function TaskCard({
             {task.frequency_type !== 'once' && <CompletionCounter taskId={task.id} />}
           </div>
           {task.description && <p className="mt-1 text-sm text-gray-600">{task.description}</p>}
-          <SubtaskList taskId={task.id} />
+          {/* Maintenance action buttons */}
+          {task.task_type === 'maintenance' && (
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <button onClick={() => setShowNotes(!showNotes)} className="flex items-center gap-1 rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-primary-600 transition-colors">
+                <MessageCircle className="h-3.5 w-3.5" /> Notas
+              </button>
+              <button onClick={handleAddPhoto} className="flex items-center gap-1 rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-primary-600 transition-colors">
+                <Camera className="h-3.5 w-3.5" /> Foto
+              </button>
+            </div>
+          )}
+          <SubtaskList taskId={task.id} members={members} />
           <TaskComments taskId={task.id} />
         </div>
 
@@ -489,7 +591,7 @@ function TaskCard({
               </button>
             </div>
           )}
-          {canComplete && (
+          {canComplete && task.task_type !== 'maintenance' && (
             <button
               onClick={() => {
                 if (isOverdue && task.next_due_date) {
@@ -512,6 +614,17 @@ function TaskCard({
               {isCompleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-5 w-5" strokeWidth={3} />}
             </button>
           )}
+          {/* Maintenance status advancement */}
+          {task.task_type === 'maintenance' && task.status !== 'completed' && (
+            <button
+              onClick={handleAdvanceStatus}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${task.status === 'active' ? 'border-blue-300 text-blue-700 hover:bg-blue-50' : 'border-green-300 text-green-700 hover:bg-green-50'}`}
+              title={task.status === 'active' ? 'Iniciar mantenimiento' : 'Completar mantenimiento'}
+            >
+              {task.status === 'active' ? <Play className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+              {task.status === 'active' ? 'Iniciar' : 'Completar'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -523,6 +636,33 @@ function TaskCard({
       {/* Rotation fairness stats */}
       {task.rotation_enabled && task.rotation_members.length >= 2 && (
         <RotationStats taskId={task.id} rotationMembers={task.rotation_members} currentAssignees={task.task_assignments.map((a) => a.user_id)} homeId={homeId} />
+      )}
+
+      {/* Maintenance notes */}
+      {task.task_type === 'maintenance' && showNotes && (
+        <div className="mt-3 border-t border-gray-200 pt-3 space-y-2">
+          <div className="flex gap-2">
+            <input type="text" value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="Agregar nota..." className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs" onKeyDown={(e) => { if (e.key === 'Enter' && newNote.trim()) handleAddNote() }} />
+            <button onClick={handleAddNote} disabled={!newNote.trim()} className="rounded bg-primary-600 px-2 py-1 text-xs text-white disabled:opacity-50">+</button>
+          </div>
+          {notes?.map((note: any) => (
+            <div key={note.id} className="rounded bg-gray-50 px-2 py-1 text-xs">
+              <span className="font-medium text-gray-700">{note.profiles?.display_name}:</span> <span className="text-gray-600">{note.content}</span>
+              <span className="ml-2 text-gray-400">{new Date(note.created_at).toLocaleDateString('es-CO')}</span>
+            </div>
+          ))}
+          {notes?.length === 0 && <p className="text-xs text-gray-400">Sin notas aún</p>}
+        </div>
+      )}
+
+      {/* Maintenance photos */}
+      {task.task_type === 'maintenance' && photos && photos.length > 0 && (
+        <div className="mt-3 border-t border-gray-200 pt-3">
+          <p className="text-xs font-medium text-gray-500 mb-2">Fotos ({photos.length})</p>
+          <div className="flex gap-2 flex-wrap">
+            {photos.map((photo) => <PhotoThumbnail key={photo.id} photo={photo} />)}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -801,12 +941,33 @@ function AssigneeEditor({ taskId, members, currentAssignees, onSave, onCancel }:
   )
 }
 
+function PhotoThumbnail({ photo }: { photo: { id: string; url: string; caption: string | null } }) {
+  const [showModal, setShowModal] = useState(false)
+  return (
+    <>
+      <button onClick={() => setShowModal(true)} className="block h-16 w-16 overflow-hidden rounded-lg border border-gray-200 hover:border-primary-400 transition-colors">
+        <img src={photo.url} alt={photo.caption ?? 'Foto'} className="h-full w-full object-cover" />
+      </button>
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowModal(false)}>
+          <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowModal(false)} className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-lg">✕</button>
+            <img src={photo.url} alt={photo.caption ?? 'Foto'} className="max-h-[85vh] max-w-full rounded-lg object-contain" />
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
   homeId: string; members: Member[]; onCreated: () => void; onCancel: () => void
 }) {
   const { session } = useAuth()
+  const [taskType, setTaskType] = useState<'task' | 'maintenance'>('task')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium')
   const [frequencyType, setFrequencyType] = useState('once')
   const [selectedDays, setSelectedDays] = useState<number[]>([1]) // default Monday
   const [dayOfMonth, setDayOfMonth] = useState(1)
@@ -901,6 +1062,8 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
         rotation_enabled: rotationEnabled,
         rotation_members: rotationEnabled ? selectedAssignees : [],
         rotation_index: 0,
+        task_type: taskType,
+        priority: taskType === 'maintenance' ? priority : null,
       })
       .select().single()
 
@@ -920,10 +1083,29 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-lg border border-gray-200 bg-white p-4 space-y-4">
-      <input type="text" required placeholder="Título de la tarea" value={title} onChange={(e) => setTitle(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500" maxLength={200} data-testid="task-form-title" />
+      {/* Task type selector */}
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setTaskType('task')} className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${taskType === 'task' ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>Tarea</button>
+        <button type="button" onClick={() => { setTaskType('maintenance'); setFrequencyType('once') }} className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all ${taskType === 'maintenance' ? 'bg-orange-500 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}><Wrench className="h-3.5 w-3.5" /> Mantenimiento</button>
+      </div>
+
+      <input type="text" required placeholder={taskType === 'maintenance' ? '¿Qué necesita arreglo?' : 'Título de la tarea'} value={title} onChange={(e) => setTitle(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500" maxLength={200} data-testid="task-form-title" />
       <textarea placeholder="Descripción (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={1000} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
 
-      {/* Frequency selector */}
+      {/* Priority (maintenance only) */}
+      {taskType === 'maintenance' && (
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1 block">Prioridad</label>
+          <div className="flex gap-2">
+            {([{ key: 'high', label: 'Alta', color: 'border-red-400 bg-red-50 text-red-700' }, { key: 'medium', label: 'Media', color: 'border-yellow-400 bg-yellow-50 text-yellow-700' }, { key: 'low', label: 'Baja', color: 'border-green-400 bg-green-50 text-green-700' }] as const).map((p) => (
+              <button key={p.key} type="button" onClick={() => setPriority(p.key)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${priority === p.key ? p.color + ' shadow-sm' : 'border-gray-300 bg-gray-50 text-gray-600'}`}>{p.label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Frequency selector (tasks only — maintenance is always 'once') */}
+      {taskType === 'task' && (
       <div className="space-y-3">
         <select value={frequencyType} onChange={(e) => setFrequencyType(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" data-testid="task-form-frequency">
           <option value="once">Una vez</option>
@@ -1031,6 +1213,21 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
           </div>
         )}
       </div>
+      )}
+
+      {/* Date for maintenance */}
+      {taskType === 'maintenance' && (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-gray-600">Fecha estimada (opcional)</label>
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-600">Hora (opcional)</label>
+            <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+          </div>
+        </div>
+      )}
 
       {/* Assignees */}
       <div>
@@ -1053,7 +1250,7 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
       )}
 
       <div className="flex gap-2 pt-2">
-        <button type="submit" disabled={isLoading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50" data-testid="task-form-submit">{isLoading ? 'Creando...' : 'Crear Tarea'}</button>
+        <button type="submit" disabled={isLoading} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50" data-testid="task-form-submit">{isLoading ? 'Creando...' : taskType === 'maintenance' ? 'Registrar Mantenimiento' : 'Crear Tarea'}</button>
         <button type="button" onClick={onCancel} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">Cancelar</button>
       </div>
     </form>

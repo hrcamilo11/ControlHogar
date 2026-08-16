@@ -6,11 +6,34 @@
 - **Plataformas**: Web (React + Vite + TailwindCSS)
 - **Backend**: Supabase Cloud (PostgreSQL + Auth + Realtime + Storage + Edge Functions)
 - **Deploy**: Vercel
-- **Última actualización**: 2026-08-12
+- **Última actualización**: 2026-08-16
 
 ---
 
 ## Changelog
+
+### v0.2.0 — Fusión Mantenimiento + Tareas (2026-08-16)
+
+#### Mantenimiento fusionado en Tareas
+- Mantenimientos ahora son un tipo de tarea (`task_type = 'maintenance'`)
+- Migración SQL: columnas `task_type`, `priority`, `status`, `completed_by`, `completed_at` en tabla `tasks`
+- Datos existentes migrados automáticamente de `maintenances` a `tasks`
+- Tablas `maintenance_photos` y `maintenance_notes` renombradas a `task_photos` y `task_notes`
+- Formulario de creación con selector tipo (Tarea / Mantenimiento)
+- Prioridad (Alta/Media/Baja) para mantenimientos
+- Avance de estado (Activo → En progreso → Completado) con botones en la tarjeta
+- Fotos con upload + galería lightbox para mantenimientos
+- Notas inline para mantenimientos
+- Filtro por tipo (Todo / Tareas / Mantenim.) en la lista
+- Badge de tipo "Mantenim." en tarjetas de mantenimiento
+
+#### Limpieza
+- Eliminado `MaintenancePanel.tsx` (funcionalidad absorbida por TasksPanel)
+- Eliminado `ActivityFeed.tsx` (reemplazado por UnifiedNotifications)
+- Tab "Hogar" simplificado: solo muestra Miembros (mantenimientos están en Tareas)
+- Icono de tab Hogar cambiado a Users
+
+---
 
 ### v0.1.0 — MVP Web Completo (2026-08-10 → 2026-08-12)
 
@@ -151,12 +174,12 @@
 
 ### Prioridad 2: Mejoras Funcionales
 
-- [ ] **Unificar Actividad + Alertas**: una sola vista "Notificaciones" con filtros (Todo / Requiere acción)
-- [ ] **Dashboard accionable**: agregar "Completar" directo desde inicio, "Marcar pagado" en cards
-- [ ] **Calendario interactivo**: clic en día vacío permite crear tarea/pago/mantenimiento
-- [ ] **Balance con simplificación de deudas**: algoritmo que minimiza número de transacciones necesarias
-- [ ] **Subtareas con asignado**: cada item del checklist puede asignarse a alguien diferente
-- [ ] **Considerar fusionar Mantenimiento con Tareas**: ambos son muy similares, mantenimiento podría ser un "tipo" de tarea sin recurrencia
+- [x] **Unificar Actividad + Alertas**: vista "Notificaciones" con filtros (Todo / Requiere acción / Actividad)
+- [x] **Dashboard accionable**: botón completar tarea directo desde Inicio
+- [x] **Calendario interactivo**: clic en día vacío permite crear tarea/mantenimiento inline
+- [x] **Balance con simplificación de deudas**: algoritmo que minimiza transacciones necesarias
+- [x] **Subtareas con asignado**: cada item del checklist puede asignarse a alguien
+- [x] **Considerar fusionar Mantenimiento con Tareas**: fusionado — mantenimiento es ahora un tipo de tarea
 
 ### Prioridad 3: UX y Pulido
 
@@ -189,7 +212,7 @@
 
 | Decisión                        | Opciones                                        | Estado      |
 | -------------------------------- | ----------------------------------------------- | ----------- |
-| Fusionar Mantenimiento en Tareas | Módulo separado vs tipo de tarea               | Por evaluar |
+| Fusionar Mantenimiento en Tareas | Módulo separado vs tipo de tarea               | Completado (fusionado) |
 | Lista de compras                 | Sub-tab de Finanzas vs acceso rápido en Inicio | Por evaluar |
 | i18n                             | Implementar completo vs eliminar sistema muerto | Por evaluar |
 | Frecuencia "custom"              | Exponer en UI vs eliminar del código           | Por evaluar |

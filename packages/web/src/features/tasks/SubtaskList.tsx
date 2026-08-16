@@ -10,13 +10,15 @@ interface Subtask {
   title: string
   is_completed: boolean
   completed_by: string | null
+  assigned_to: string | null
   sort_order: number
 }
 
-export function SubtaskList({ taskId }: { taskId: string }) {
+export function SubtaskList({ taskId, members }: { taskId: string; members?: { user_id: string; profiles: { display_name: string } | null }[] }) {
   const { session } = useAuth()
   const queryClient = useQueryClient()
   const [newTitle, setNewTitle] = useState('')
+  const [newAssignee, setNewAssignee] = useState('')
   const [isAdding, setIsAdding] = useState(false)
 
   const { data: subtasks } = useQuery({
@@ -40,12 +42,14 @@ export function SubtaskList({ taskId }: { taskId: string }) {
         task_id: taskId,
         title,
         sort_order: maxOrder + 1,
+        assigned_to: newAssignee || null,
       })
       if (error) throw error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subtasks', taskId] })
       setNewTitle('')
+      setNewAssignee('')
       setIsAdding(false)
     },
     onError: (err: Error) => toast.error(err.message),
@@ -118,6 +122,11 @@ export function SubtaskList({ taskId }: { taskId: string }) {
             <span className={`flex-1 text-xs ${subtask.is_completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
               {subtask.title}
             </span>
+            {subtask.assigned_to && members && (
+              <span className="text-[10px] text-gray-400">
+                {members.find((m) => m.user_id === subtask.assigned_to)?.profiles?.display_name?.split(' ')[0] ?? ''}
+              </span>
+            )}
             <button
               onClick={() => deleteMutation.mutate(subtask.id)}
               className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
@@ -143,6 +152,12 @@ export function SubtaskList({ taskId }: { taskId: string }) {
             }}
             autoFocus
           />
+          {members && members.length > 1 && (
+            <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)} className="rounded border border-gray-300 px-1 py-1 text-[10px] max-w-[80px]">
+              <option value="">Todos</option>
+              {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.profiles?.display_name?.split(' ')[0]}</option>)}
+            </select>
+          )}
           <button
             onClick={() => { if (newTitle.trim()) addMutation.mutate(newTitle.trim()) }}
             disabled={!newTitle.trim()}

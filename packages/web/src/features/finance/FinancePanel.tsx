@@ -604,6 +604,59 @@ function BalanceView({ homeId }: { homeId: string }) {
       </div>
 
       <p className="text-xs text-gray-500">Verde = le deben · Rojo = debe a otros</p>
+
+      {/* Simplified settlement plan */}
+      {balances && balances.some((b) => b.netBalance !== 0) && (
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Plan de liquidación simplificado</h3>
+          <p className="text-xs text-gray-500 mb-3">Mínimas transacciones para saldar todas las deudas:</p>
+          <SimplifiedSettlements balances={balances} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SimplifiedSettlements({ balances }: { balances: MemberBalance[] }) {
+  // Algorithm: minimize transactions by matching debtors with creditors
+  const debtors = balances.filter((b) => b.netBalance < 0).map((b) => ({ ...b, remaining: Math.abs(b.netBalance) }))
+  const creditors = balances.filter((b) => b.netBalance > 0).map((b) => ({ ...b, remaining: b.netBalance }))
+
+  const transactions: { from: string; to: string; amount: number }[] = []
+
+  // Greedy: match largest debtor with largest creditor
+  const sortedDebtors = [...debtors].sort((a, b) => b.remaining - a.remaining)
+  const sortedCreditors = [...creditors].sort((a, b) => b.remaining - a.remaining)
+
+  for (const debtor of sortedDebtors) {
+    for (const creditor of sortedCreditors) {
+      if (debtor.remaining <= 0) break
+      if (creditor.remaining <= 0) continue
+
+      const amount = Math.min(debtor.remaining, creditor.remaining)
+      if (amount > 0.01) {
+        transactions.push({ from: debtor.displayName, to: creditor.displayName, amount: Math.round(amount * 100) / 100 })
+        debtor.remaining -= amount
+        creditor.remaining -= amount
+      }
+    }
+  }
+
+  if (transactions.length === 0) {
+    return <p className="text-xs text-green-600">Todas las cuentas están saldadas</p>
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {transactions.map((t, i) => (
+        <div key={i} className="flex items-center gap-2 text-xs">
+          <span className="font-medium text-red-600">{t.from}</span>
+          <span className="text-gray-400">→</span>
+          <span className="font-medium text-green-600">{t.to}</span>
+          <span className="ml-auto font-semibold text-gray-900 dark:text-gray-100">${t.amount.toLocaleString('es-CO')}</span>
+        </div>
+      ))}
+      <p className="text-[10px] text-gray-400 mt-2">{transactions.length} transacción{transactions.length > 1 ? 'es' : ''} para saldar todo</p>
     </div>
   )
 }

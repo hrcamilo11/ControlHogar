@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '../auth/AuthProvider'
+import toast from 'react-hot-toast'
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, format, isSameMonth, isSameDay, isToday, addMonths, subMonths,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, ClipboardList, CreditCard, Wrench, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardList, CreditCard, Wrench, X, Plus } from 'lucide-react'
 
 interface CalendarEvent {
   id: string
@@ -20,6 +22,7 @@ interface CalendarEvent {
 export function GlobalCalendar({ homeId }: { homeId: string }) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
+  const queryClient = useQueryClient()
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
@@ -164,9 +167,9 @@ export function GlobalCalendar({ homeId }: { homeId: string }) {
             </div>
 
             {selectedDayEvents.length === 0 ? (
-              <p className="text-xs text-gray-500">No hay eventos este día</p>
+              <p className="text-xs text-gray-500 mb-3">No hay eventos este día</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 mb-3">
                 {selectedDayEvents.map((event) => (
                   <div key={`${event.type}-${event.id}`} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2">
                     <div className="mt-0.5">
@@ -182,9 +185,94 @@ export function GlobalCalendar({ homeId }: { homeId: string }) {
                 ))}
               </div>
             )}
+
+            {/* Quick create actions */}
+            <div className="border-t border-gray-200 pt-3 space-y-1.5">
+              <p className="text-[10px] text-gray-400 uppercase font-medium mb-1">Crear para este día</p>
+              <QuickCreateButton
+                label="Tarea"
+                homeId={homeId}
+                selectedDay={selectedDay}
+                type="task"
+                onCreated={() => queryClient.invalidateQueries({ queryKey: ['global-calendar', homeId] })}
+              />
+              <QuickCreateButton
+                label="Mantenimiento"
+                homeId={homeId}
+                selectedDay={selectedDay}
+                type="maintenance"
+                onCreated={() => queryClient.invalidateQueries({ queryKey: ['global-calendar', homeId] })}
+              />
+            </div>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+
+function QuickCreateButton({ label, homeId, selectedDay, type, onCreated }: {
+  label: string; homeId: string; selectedDay: Date; type: 'task' | 'maintenance'; onCreated: () => void
+}) {
+  const { session } = useAuth()
+  const [isCreating, setIsCreating] = useState(false)
+  const [title, setTitle] = useState('')
+  const [showInput, setShowInput] = useState(false)
+
+  const handleCreate = async () => {
+    if (!title.trim() || !session) return
+    setIsCreating(true)
+
+    if (type === 'task') {
+      await supabase.from('tasks').insert({
+        home_id: homeId,
+        title: title.trim(),
+        created_by: session.user.id,
+        frequency_type: 'once',
+        next_due_date: selectedDay.toISOString(),
+      })
+    } else {
+      await supabase.from('maintenances').insert({
+        home_id: homeId,
+        title: title.trim(),
+        created_by: session.user.id,
+        estimated_date: selectedDay.toISOString(),
+      })
+    }
+
+    toast.success(`${label} creado`)
+    setTitle('')
+    setShowInput(false)
+    setIsCreating(false)
+    onCreated()
+  }
+
+  if (showInput) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={`Nombre del ${label.toLowerCase()}...`}
+          className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary-500 focus:outline-none"
+          onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setShowInput(false) }}
+          autoFocus
+        />
+        <button onClick={handleCreate} disabled={!title.trim() || isCreating} className="rounded bg-primary-600 px-2 py-1 text-xs text-white disabled:opacity-50">
+          <Plus className="h-3 w-3" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setShowInput(true)}
+      className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-xs text-gray-500 hover:border-primary-400 hover:text-primary-600 transition-colors"
+    >
+      <Plus className="h-3 w-3" /> {label}
+    </button>
   )
 }
