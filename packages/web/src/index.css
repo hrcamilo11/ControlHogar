@@ -64,8 +64,11 @@
   .dark .bg-orange-50,
   .dark .bg-red-50,
   .dark .bg-yellow-50,
-  .dark .bg-purple-50,
-  .dark .bg-primary-50 {
+  .dark .bg-purple-50 {
+    @apply !bg-transparent;
+  }
+
+  .dark .bg-primary-50:not([class*="dark:bg-primary"]) {
     @apply !bg-transparent;
   }
 

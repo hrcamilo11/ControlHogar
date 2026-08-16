@@ -75,9 +75,9 @@ export function NotificationsPanel() {
       </div>
 
       {notifications?.length === 0 && (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
-          <Bell className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">No hay notificaciones</p>
+        <div className="rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 p-8 text-center">
+          <Bell className="h-8 w-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">No hay notificaciones</p>
         </div>
       )}
 
@@ -86,14 +86,16 @@ export function NotificationsPanel() {
           <div
             key={notif.id}
             className={`group flex items-start gap-3 rounded-lg border p-3 transition-colors ${
-              notif.is_read ? 'border-gray-100 bg-white' : 'border-primary-200 bg-primary-50/50'
+              notif.is_read 
+                ? 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800' 
+                : 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-950'
             }`}
           >
             <div className={`mt-0.5 h-2.5 w-2.5 rounded-full flex-shrink-0 ${notif.is_read ? 'bg-transparent' : getNotifColor(notif.type)}`} />
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-medium ${notif.is_read ? 'text-gray-700' : 'text-gray-900'}`}>{notif.title}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{notif.body}</p>
-              <p className="text-[10px] text-gray-400 mt-1">
+              <p className={`text-sm font-medium ${notif.is_read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-100'}`}>{notif.title}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{notif.body}</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
                 {new Date(notif.created_at).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
