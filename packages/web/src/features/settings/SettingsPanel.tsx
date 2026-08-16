@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import { Moon, Sun, Monitor, User, Lock, Home, Tag, Download, LogOut, Crown, DoorOpen, Globe, UserPlus } from 'lucide-react'
 import { accentPresets, applyAccentColor } from '@/lib/accentColors'
+import { useConfirm, useDialog } from '@/components/ConfirmDialog'
 
 type Theme = 'light' | 'dark' | 'amoled' | 'system'
 type SettingsSection = 'appearance' | 'profile' | 'home' | 'members' | 'categories' | 'export'
@@ -104,6 +105,7 @@ function AppearanceSection() {
 // ─── Profile/Account ───
 function ProfileSection() {
   const { session, signOut } = useAuth()
+  const confirm = useConfirm()
   const [displayName, setDisplayName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -177,7 +179,7 @@ function ProfileSection() {
       </div>
 
       <div className="border-t border-gray-200 pt-4">
-        <button onClick={() => { if (confirm('¿Cerrar sesión?')) signOut() }} className="flex items-center gap-2 text-sm text-red-600 hover:text-red-800 font-medium">
+        <button onClick={async () => { if (await confirm({ message: '¿Cerrar sesión?', confirmText: 'Salir', variant: 'danger' })) signOut() }} className="flex items-center gap-2 text-sm text-red-600 hover:text-red-800 font-medium">
           <LogOut className="h-4 w-4" /> Cerrar sesión
         </button>
       </div>
@@ -189,6 +191,7 @@ function ProfileSection() {
 function HomeSection({ homeId }: { homeId?: string }) {
   const { session } = useAuth()
   const queryClient = useQueryClient()
+  const { confirm, prompt } = useDialog()
   const [homeName, setHomeName] = useState('')
   const [homeDescription, setHomeDescription] = useState('')
   const [currency, setCurrency] = useState('COP')
@@ -237,14 +240,15 @@ function HomeSection({ homeId }: { homeId?: string }) {
     if (candidates.length === 0) { toast.error('No hay miembros elegibles para transferir'); return }
 
     const names = candidates.map((m: any, i: number) => `${i + 1}. ${(m as any).profiles?.display_name ?? 'Sin nombre'}`).join('\n')
-    const choice = prompt(`¿A quién transferir la propiedad?\n\n${names}\n\nEscribe el número:`)
+    const choice = await prompt({ title: 'Transferir propiedad', message: `¿A quién transferir?\n\n${names}`, placeholder: 'Escribe el número', confirmText: 'Transferir' })
 
     if (!choice) return
     const index = parseInt(choice) - 1
     if (isNaN(index) || index < 0 || index >= candidates.length) { toast.error('Opción inválida'); return }
 
     const target = candidates[index] as any
-    if (!confirm(`¿Transferir la propiedad del hogar a ${target.profiles?.display_name}? Tú pasarás a ser admin.`)) return
+    const ok = await confirm({ title: 'Confirmar transferencia', message: `¿Transferir la propiedad del hogar a ${target.profiles?.display_name}? Tú pasarás a ser admin.`, confirmText: 'Transferir', variant: 'warning' })
+    if (!ok) return
 
     await supabase.from('home_members').update({ role: 'admin' }).eq('home_id', homeId!).eq('user_id', session!.user.id)
     await supabase.from('home_members').update({ role: 'owner' }).eq('home_id', homeId!).eq('user_id', target.user_id)
@@ -254,7 +258,7 @@ function HomeSection({ homeId }: { homeId?: string }) {
 
   const handleLeaveHome = async () => {
     if (isOwner) { toast.error('Debes transferir la propiedad antes de abandonar'); return }
-    if (!confirm('¿Abandonar este hogar? Perderás acceso a todos los datos.')) return
+    if (!(await confirm({ title: 'Abandonar hogar', message: '¿Abandonar este hogar? Perderás acceso a todos los datos.', confirmText: 'Abandonar', variant: 'danger' }))) return
     await supabase.from('home_members').delete().eq('home_id', homeId!).eq('user_id', session!.user.id)
     queryClient.invalidateQueries({ queryKey: ['homes'] })
     toast.success('Has abandonado el hogar')
@@ -262,7 +266,7 @@ function HomeSection({ homeId }: { homeId?: string }) {
   }
 
   const handleDeleteHome = async () => {
-    if (!confirm('¿Eliminar este hogar?\n\nSe conservarán los datos por 30 días antes de eliminarse permanentemente.')) return
+    if (!(await confirm({ title: 'Eliminar hogar', message: 'Se conservarán los datos por 30 días antes de eliminarse permanentemente.', confirmText: 'Eliminar', variant: 'danger' }))) return
     await supabase.from('homes').update({ is_active: false, deleted_at: new Date().toISOString() }).eq('id', homeId!)
     queryClient.invalidateQueries({ queryKey: ['homes'] })
     toast.success('Hogar eliminado (30 días para restaurar)')
@@ -337,6 +341,7 @@ function HomeSection({ homeId }: { homeId?: string }) {
 // ─── Custom Categories ───
 function CategoriesSection({ homeId }: { homeId?: string }) {
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
   const [newCategory, setNewCategory] = useState('')
 
   const { data: categories } = useQuery({
@@ -357,7 +362,7 @@ function CategoriesSection({ homeId }: { homeId?: string }) {
 
   const handleDelete = async (id: string, isDefault: boolean) => {
     if (isDefault) { toast.error('No se pueden eliminar categorías predeterminadas'); return }
-    if (!confirm('¿Eliminar esta categoría?')) return
+    if (!(await confirm({ message: '¿Eliminar esta categoría?', confirmText: 'Eliminar', variant: 'danger' }))) return
     const { error } = await supabase.from('expense_categories').delete().eq('id', id)
     if (error) toast.error(error.message)
     else { toast.success('Categoría eliminada'); queryClient.invalidateQueries({ queryKey: ['expense-categories'] }) }
@@ -481,6 +486,7 @@ function ExportSection({ homeId }: { homeId?: string }) {
 function MembersSection({ homeId }: { homeId?: string }) {
   const { session } = useAuth()
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('member')
@@ -519,7 +525,7 @@ function MembersSection({ homeId }: { homeId?: string }) {
   }
 
   const handleRemoveMember = async (userId: string, displayName: string) => {
-    if (!confirm(`¿Eliminar a ${displayName} del hogar?`)) return
+    if (!(await confirm({ title: 'Eliminar miembro', message: `¿Eliminar a ${displayName} del hogar?`, confirmText: 'Eliminar', variant: 'danger' }))) return
     const { error } = await supabase.from('home_members').delete().eq('home_id', homeId!).eq('user_id', userId)
     if (error) toast.error(error.message)
     else { queryClient.invalidateQueries({ queryKey: ['home-members', homeId] }); toast.success('Miembro eliminado') }
@@ -537,7 +543,7 @@ function MembersSection({ homeId }: { homeId?: string }) {
   }
 
   const handleRevoke = async (id: string) => {
-    if (!confirm('¿Revocar invitación?')) return
+    if (!(await confirm({ message: '¿Revocar invitación?', confirmText: 'Revocar', variant: 'warning' }))) return
     await supabase.from('invitations').update({ revoked_at: new Date().toISOString() }).eq('id', id)
     queryClient.invalidateQueries({ queryKey: ['invitations', homeId] })
     toast.success('Revocada')

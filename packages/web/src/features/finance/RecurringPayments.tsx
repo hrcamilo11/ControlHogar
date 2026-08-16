@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '../auth/AuthProvider'
 import toast from 'react-hot-toast'
 import { CreditCard, Trash2 } from 'lucide-react'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 interface RecurringPayment {
   id: string
@@ -18,6 +19,7 @@ interface RecurringPayment {
 export function RecurringPayments({ homeId }: { homeId: string }) {
   const [showForm, setShowForm] = useState(false)
   const { session } = useAuth()
+  const confirm = useConfirm()
   const queryClient = useQueryClient()
 
   const { data: payments, isLoading } = useQuery({
@@ -155,7 +157,7 @@ export function RecurringPayments({ homeId }: { homeId: string }) {
                   <CreditCard className="h-3.5 w-3.5" /> Pagado
                 </button>
                 <button
-                  onClick={() => { if (confirm('¿Eliminar este pago recurrente?')) deleteMutation.mutate(payment.id) }}
+                  onClick={async () => { if (await confirm({ message: '¿Eliminar este pago recurrente?', confirmText: 'Eliminar', variant: 'danger' })) deleteMutation.mutate(payment.id) }}
                   className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />

@@ -9,6 +9,7 @@ import { SubtaskList } from './SubtaskList'
 import { TaskComments } from './TaskComments'
 import { Pencil, Trash2, Pause, Play, Check, Loader2, Camera, MessageCircle, Wrench } from 'lucide-react'
 import { undoableDelete } from '@/lib/undoableAction'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 interface Task {
   id: string
@@ -382,6 +383,7 @@ function TaskCard({
   const [newNote, setNewNote] = useState('')
   const queryClient = useQueryClient()
   const { session } = useAuth()
+  const confirm = useConfirm()
 
   const isOverdue = task.next_due_date ? new Date(task.next_due_date) < new Date() : false
   const isAssignedToMe = task.task_assignments.some((a) => a.user_id === currentUserId)
@@ -395,7 +397,8 @@ function TaskCard({
     .filter(Boolean)
 
   const handleDelete = async () => {
-    if (!confirm('¿Eliminar esta tarea?')) return
+    const ok = await confirm({ title: 'Eliminar tarea', message: `¿Eliminar "${task.title}"?`, confirmText: 'Eliminar', variant: 'danger' })
+    if (!ok) return
 
     // Optimistic: hide immediately
     queryClient.setQueryData<Task[]>(['tasks', homeId], (old) => old?.filter((t) => t.id !== task.id))
@@ -407,7 +410,6 @@ function TaskCard({
         queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
       },
       onUndo: () => {
-        // Restore the task in the cache
         queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
       },
     })
@@ -428,7 +430,7 @@ function TaskCard({
       )
       const nextDate = nextDue ? new Date(nextDue).toLocaleString('es-CO', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'próxima ocurrencia'
 
-      if (!confirm(`¿Reactivar tarea?\n\nPróxima fecha: ${nextDate}`)) return
+      if (!(await confirm({ message: `¿Reactivar tarea?\n\nPróxima fecha: ${nextDate}`, confirmText: 'Reactivar' }))) return
 
       await supabase.from('tasks').update({ next_due_date: nextDue }).eq('id', task.id)
       queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
@@ -606,11 +608,12 @@ function TaskCard({
           )}
           {canComplete && task.task_type !== 'maintenance' && (
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (isOverdue && task.next_due_date) {
                   const hoursOverdue = Math.floor((Date.now() - new Date(task.next_due_date).getTime()) / 3600000)
                   if (hoursOverdue > 24) {
-                    if (!confirm(`Esta tarea está atrasada por ${hoursOverdue} horas. ¿Completar de todos modos?`)) return
+                    const ok = await confirm({ message: `Esta tarea está atrasada por ${hoursOverdue} horas. ¿Completar de todos modos?`, confirmText: 'Completar', variant: 'warning' })
+                    if (!ok) return
                   }
                 }
                 onComplete()

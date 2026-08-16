@@ -7,6 +7,7 @@ import { ShoppingList } from './ShoppingList'
 import { RecurringPayments } from './RecurringPayments'
 import { BudgetPanel } from './BudgetPanel'
 import { Pencil, Trash2, Paperclip, Banknote } from 'lucide-react'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 interface Expense {
   id: string
@@ -166,10 +167,11 @@ function ExpensesView({ homeId }: { homeId: string }) {
 function ExpenseCard({ expense, homeId, onEdit }: { expense: Expense; homeId: string; onEdit: () => void }) {
   const queryClient = useQueryClient()
   const { session } = useAuth()
+  const confirm = useConfirm()
   const [showReceipt, setShowReceipt] = useState(false)
 
   const handleDelete = async () => {
-    if (!confirm('¿Eliminar este gasto? El balance se recalculará.')) return
+    if (!(await confirm({ title: 'Eliminar gasto', message: '¿Eliminar este gasto? El balance se recalculará.', confirmText: 'Eliminar', variant: 'danger' }))) return
     const { error } = await supabase.from('expenses').delete().eq('id', expense.id)
     if (error) toast.error(error.message)
     else {
@@ -464,6 +466,7 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
 function BalanceView({ homeId }: { homeId: string }) {
   const { session } = useAuth()
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
 
   const { data: balances, isLoading } = useQuery({
     queryKey: ['balance', homeId],
@@ -536,7 +539,7 @@ function BalanceView({ homeId }: { homeId: string }) {
   if (isLoading) return <p className="text-gray-500">Calculando balance...</p>
 
   const handleSettle = async (fromUser: string, toUser: string, amount: number, toName: string) => {
-    if (!confirm(`¿Registrar pago de $${amount.toLocaleString('es-CO')} a ${toName}?`)) return
+    if (!(await confirm({ message: `¿Registrar pago de $${amount.toLocaleString('es-CO')} a ${toName}?`, confirmText: 'Registrar' }))) return
 
     const { error } = await supabase.from('settlements').insert({
       home_id: homeId, from_user: fromUser, to_user: toUser,

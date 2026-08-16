@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast'
 import { App } from './App'
 import { AuthProvider } from './features/auth/AuthProvider'
 import { ConnectionIndicator } from './components/ConnectionIndicator'
+import { DialogProvider } from './components/ConfirmDialog'
 import { loadSavedAccent } from './lib/accentColors'
 import './index.css'
 
@@ -41,8 +42,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <App />
-          <ConnectionIndicator />
+          <DialogProvider>
+            <App />
+            <ConnectionIndicator />
+          </DialogProvider>
           <Toaster
             position="top-right"
             toastOptions={{
