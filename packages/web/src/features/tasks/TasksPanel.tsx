@@ -10,7 +10,6 @@ import { TaskComments } from './TaskComments'
 import { Pencil, Trash2, Pause, Play, Check, Loader2, Camera, MessageCircle, Wrench } from 'lucide-react'
 import { undoableDelete } from '@/lib/undoableAction'
 import { useConfirm } from '@/components/ConfirmDialog'
-import { SelectButton } from '@/components/SelectButton'
 
 interface Task {
   id: string
@@ -281,17 +280,16 @@ export function TasksPanel({ homeId }: { homeId: string }) {
                 )
               })}
             </div>
-            <SelectButton
-              value={sortBy}
-              onChange={(v) => setSortBy(v as SortOption)}
-              title="Ordenar por"
-              options={[
+            {/* Sort chips */}
+            <div className="flex items-center gap-1">
+              {([
                 { key: 'date', label: 'Fecha' },
                 { key: 'title', label: 'Título' },
                 { key: 'frequency', label: 'Frecuencia' },
-              ]}
-              size="sm"
-            />
+              ] as const).map(({ key, label }) => (
+                <button key={key} onClick={() => setSortBy(key)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${sortBy === key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{label}</button>
+              ))}
+            </div>
           </div>
 
           {showForm && (
@@ -352,19 +350,11 @@ function TaskHistory({ homeId, members }: { homeId: string; members: Member[] })
   return (
     <div className="space-y-3">
       <h3 className="text-lg font-semibold text-gray-900">Historial de Completaciones</h3>
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-gray-500">Filtrar por:</span>
-        <SelectButton
-          value={filterUser}
-          onChange={(v) => setFilterUser(v)}
-          title="Filtrar por miembro"
-          placeholder="Todos"
-          options={[
-            { key: '', label: 'Todos' },
-            ...members.map((m) => ({ key: m.user_id, label: m.profiles?.display_name ?? '?' })),
-          ]}
-          size="sm"
-        />
+      <div className="flex items-center gap-1 flex-wrap">
+        <button onClick={() => setFilterUser('')} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${!filterUser ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>Todos</button>
+        {members.map((m) => (
+          <button key={m.user_id} onClick={() => setFilterUser(m.user_id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${filterUser === m.user_id ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{m.profiles?.display_name}</button>
+        ))}
       </div>
       {!history?.length && <p className="text-sm text-gray-500">No hay completaciones registradas.</p>}
       <div className="space-y-1">
@@ -806,20 +796,21 @@ function EditTaskForm({ task, members, homeId, onSaved, onCancel }: {
       <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500" maxLength={200} />
       <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} maxLength={1000} placeholder="Descripción (opcional)" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
 
-      <SelectButton
-        value={frequencyType}
-        onChange={(v) => setFrequencyType(v)}
-        title="Frecuencia"
-        options={[
-          { key: 'once', label: 'Una vez' },
-          { key: 'daily', label: 'Diaria' },
-          { key: 'weekly', label: 'Semanal' },
-          { key: 'biweekly', label: 'Quincenal' },
-          { key: 'monthly', label: 'Mensual' },
-          { key: 'custom', label: 'Personalizada (cada X días)' },
-        ]}
-        className="w-full"
-      />
+      <div>
+        <label className="text-xs text-gray-600 mb-1 block">Frecuencia</label>
+        <div className="flex gap-1 flex-wrap">
+          {([
+            { key: 'once', label: 'Una vez' },
+            { key: 'daily', label: 'Diaria' },
+            { key: 'weekly', label: 'Semanal' },
+            { key: 'biweekly', label: 'Quincenal' },
+            { key: 'monthly', label: 'Mensual' },
+            { key: 'custom', label: 'Cada X días' },
+          ] as const).map(({ key, label }) => (
+            <button type="button" key={key} onClick={() => setFrequencyType(key)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${frequencyType === key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{label}</button>
+          ))}
+        </div>
+      </div>
 
       {/* Custom: every X days + time */}
       {frequencyType === 'custom' && (
@@ -1141,20 +1132,20 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
       {/* Frequency selector (tasks only — maintenance is always 'once') */}
       {taskType === 'task' && (
       <div className="space-y-3">
-        <SelectButton
-          value={frequencyType}
-          onChange={(v) => setFrequencyType(v)}
-          title="Frecuencia"
-          options={[
-            { key: 'once', label: 'Una vez' },
-            { key: 'daily', label: 'Diaria' },
-            { key: 'weekly', label: 'Semanal' },
-            { key: 'biweekly', label: 'Quincenal' },
-            { key: 'monthly', label: 'Mensual' },
-          ]}
-          className="w-full"
-          data-testid="task-form-frequency"
-        />
+        <div>
+          <label className="text-xs text-gray-600 mb-1 block">Frecuencia</label>
+          <div className="flex gap-1 flex-wrap">
+            {([
+              { key: 'once', label: 'Una vez' },
+              { key: 'daily', label: 'Diaria' },
+              { key: 'weekly', label: 'Semanal' },
+              { key: 'biweekly', label: 'Quincenal' },
+              { key: 'monthly', label: 'Mensual' },
+            ] as const).map(({ key, label }) => (
+              <button type="button" key={key} onClick={() => setFrequencyType(key)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${frequencyType === key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
 
         {/* Once: date + time */}
         {frequencyType === 'once' && (

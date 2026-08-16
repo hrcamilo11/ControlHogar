@@ -8,7 +8,6 @@ import { RecurringPayments } from './RecurringPayments'
 import { BudgetPanel } from './BudgetPanel'
 import { Pencil, Trash2, Paperclip, Banknote } from 'lucide-react'
 import { useConfirm } from '@/components/ConfirmDialog'
-import { SelectButton } from '@/components/SelectButton'
 
 interface Expense {
   id: string
@@ -121,28 +120,23 @@ function ExpensesView({ homeId }: { homeId: string }) {
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
-        <SelectButton
-          value={filterCategory}
-          onChange={(v) => setFilterCategory(v)}
-          title="Filtrar por categoría"
-          placeholder="Todas las categorías"
-          options={[
-            { key: '', label: 'Todas las categorías' },
-            ...(categories?.map((c) => ({ key: c.id, label: c.name })) ?? []),
-          ]}
-          size="sm"
-        />
-        <SelectButton
-          value={filterPaidBy}
-          onChange={(v) => setFilterPaidBy(v)}
-          title="Filtrar por pagador"
-          placeholder="Todos los pagadores"
-          options={[
-            { key: '', label: 'Todos los pagadores' },
-            ...(members?.map((m) => ({ key: m.user_id, label: m.profiles?.display_name ?? '?' })) ?? []),
-          ]}
-          size="sm"
-        />
+        {/* Category filter chips */}
+        <div className="flex items-center gap-1 flex-wrap">
+          <button onClick={() => setFilterCategory('')} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${!filterCategory ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>Todas</button>
+          {categories?.map((c) => (
+            <button key={c.id} onClick={() => setFilterCategory(c.id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${filterCategory === c.id ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{c.name}</button>
+          ))}
+        </div>
+        {/* Paid-by filter chips */}
+        {members && members.length > 1 && (
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="text-xs text-gray-500">Pagó:</span>
+            <button onClick={() => setFilterPaidBy('')} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${!filterPaidBy ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>Todos</button>
+            {members.map((m) => (
+              <button key={m.user_id} onClick={() => setFilterPaidBy(m.user_id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${filterPaidBy === m.user_id ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{m.profiles?.display_name}</button>
+            ))}
+          </div>
+        )}
         {(filterCategory || filterPaidBy) && (
           <span className="text-xs text-gray-500">Total: ${totalFiltered.toLocaleString('es-CO')}</span>
         )}
@@ -396,42 +390,38 @@ function CreateExpenseForm({ homeId, members, categories, editingExpense, onCrea
 
       <div className="grid grid-cols-2 gap-2">
         <input type="number" required min="0.01" step="0.01" placeholder="Monto" value={amount} onChange={(e) => setAmount(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-        <SelectButton
-          value={categoryId}
-          onChange={(v) => setCategoryId(v)}
-          title="Categoría"
-          placeholder="Sin categoría"
-          options={[
-            { key: '', label: 'Sin categoría' },
-            ...categories.map((c) => ({ key: c.id, label: c.name })),
-          ]}
-          className="w-full"
-        />
+        <div>
+          <label className="text-xs text-gray-600 mb-1 block">Categoría</label>
+          <div className="flex gap-1 flex-wrap">
+            <button type="button" onClick={() => setCategoryId('')} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${!categoryId ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>Ninguna</button>
+            {categories.map((c) => (
+              <button type="button" key={c.id} onClick={() => setCategoryId(c.id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${categoryId === c.id ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{c.name}</button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Associate with task */}
-      <SelectButton
-        value={taskId}
-        onChange={(v) => setTaskId(v)}
-        title="Asociar a tarea"
-        placeholder="Sin tarea asociada"
-        options={[
-          { key: '', label: 'Sin tarea asociada' },
-          ...(homeTasks?.map((t) => ({ key: t.id, label: t.title })) ?? []),
-        ]}
-        className="w-full"
-      />
+      {homeTasks && homeTasks.length > 0 && (
+        <div>
+          <label className="text-xs text-gray-600 mb-1 block">Asociar a tarea (opcional)</label>
+          <div className="flex gap-1 flex-wrap">
+            <button type="button" onClick={() => setTaskId('')} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${!taskId ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>Ninguna</button>
+            {homeTasks.map((t) => (
+              <button type="button" key={t.id} onClick={() => setTaskId(t.id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${taskId === t.id ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{t.title}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Who paid */}
       <div>
         <label className="text-xs text-gray-600 mb-1 block">¿Quién pagó?</label>
-        <SelectButton
-          value={paidBy}
-          onChange={(v) => setPaidBy(v)}
-          title="¿Quién pagó?"
-          options={members.map((m) => ({ key: m.user_id, label: `${m.profiles?.display_name}${m.user_id === session?.user.id ? ' (yo)' : ''}` }))}
-          className="w-full"
-        />
+        <div className="flex gap-1 flex-wrap">
+          {members.map((m) => (
+            <button type="button" key={m.user_id} onClick={() => setPaidBy(m.user_id)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${paidBy === m.user_id ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}>{m.profiles?.display_name}{m.user_id === session?.user.id ? ' (yo)' : ''}</button>
+          ))}
+        </div>
       </div>
 
       {/* Split type */}
