@@ -10,7 +10,7 @@ import { SkipToContent } from '@/components/AccessibilityHelpers'
 import { ListSkeleton } from '@/components/Skeleton'
 import { NotificationBadge } from '../notifications/NotificationsPanel'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings, Calendar, BellRing } from 'lucide-react'
+import { Home, ClipboardList, Wallet, Wrench, BarChart3, Bell, Users, LogOut, UserPlus, X, Copy, Settings, Calendar, BellRing, Check } from 'lucide-react'
 import { useRealtimeSync } from '@/lib/useRealtimeSync'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
@@ -21,11 +21,12 @@ const FinancePanel = lazy(() => import('../finance/FinancePanel').then((m) => ({
 const MaintenancePanel = lazy(() => import('../maintenance/MaintenancePanel').then((m) => ({ default: m.MaintenancePanel })))
 const ActivityFeed = lazy(() => import('../activity/ActivityFeed').then((m) => ({ default: m.ActivityFeed })))
 const NotificationsPanel = lazy(() => import('../notifications/NotificationsPanel').then((m) => ({ default: m.NotificationsPanel })))
+const UnifiedNotifications = lazy(() => import('../notifications/UnifiedNotifications').then((m) => ({ default: m.UnifiedNotifications })))
 const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
 const GlobalCalendar = lazy(() => import('./GlobalCalendar').then((m) => ({ default: m.GlobalCalendar })))
 
 type Tab = 'home' | 'tasks' | 'finance' | 'hogar' | 'more'
-type HogarSubTab = 'maintenance' | 'members' | 'activity'
+type HogarSubTab = 'maintenance' | 'members'
 type MoreSubTab = 'notifications' | 'stats' | 'calendar' | 'settings'
 
 export function DashboardPage() {
@@ -154,7 +155,6 @@ export function DashboardPage() {
                   {([
                     { key: 'maintenance', label: 'Mantenimientos', icon: <Wrench className="h-3.5 w-3.5" /> },
                     { key: 'members', label: 'Miembros', icon: <Users className="h-3.5 w-3.5" /> },
-                    { key: 'activity', label: 'Actividad', icon: <Bell className="h-3.5 w-3.5" /> },
                   ] as const).map(({ key, label, icon }) => (
                     <button key={key} onClick={() => setHogarSubTab(key)} className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all ${hogarSubTab === key ? 'bg-primary-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}>
                       {icon} {label}
@@ -163,7 +163,6 @@ export function DashboardPage() {
                 </div>
                 {hogarSubTab === 'maintenance' && <MaintenancePanel homeId={activeHome.id} />}
                 {hogarSubTab === 'members' && <MembersPanel members={members} homeId={activeHome.id} />}
-                {hogarSubTab === 'activity' && <ActivityFeed homeId={activeHome.id} />}
               </div>
             )}
             {activeTab === 'more' && (
@@ -171,7 +170,7 @@ export function DashboardPage() {
                 {/* More sub-tabs — chips style */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {([
-                    { key: 'notifications', label: 'Alertas', icon: <BellRing className="h-3.5 w-3.5" /> },
+                    { key: 'notifications', label: 'Notificaciones', icon: <BellRing className="h-3.5 w-3.5" /> },
                     { key: 'stats', label: 'Estadísticas', icon: <BarChart3 className="h-3.5 w-3.5" /> },
                     { key: 'calendar', label: 'Calendario', icon: <Calendar className="h-3.5 w-3.5" /> },
                     { key: 'settings', label: 'Configuración', icon: <Settings className="h-3.5 w-3.5" /> },
@@ -181,7 +180,7 @@ export function DashboardPage() {
                     </button>
                   ))}
                 </div>
-                {moreSubTab === 'notifications' && <NotificationsPanel />}
+                {moreSubTab === 'notifications' && <UnifiedNotifications homeId={activeHome.id} />}
                 {moreSubTab === 'stats' && <StatsPanel homeId={activeHome.id} />}
                 {moreSubTab === 'calendar' && <GlobalCalendar homeId={activeHome.id} />}
                 {moreSubTab === 'settings' && <SettingsPanel homeId={activeHome.id} />}
@@ -196,6 +195,9 @@ export function DashboardPage() {
 
 // Quick view of recent/upcoming tasks on the Home tab
 function RecentTasks({ homeId, onViewAll }: { homeId: string; onViewAll: () => void }) {
+  const { session } = useAuth()
+  const queryClient = useQueryClient()
+
   const { data: tasks } = useQuery({
     queryKey: ['tasks-upcoming', homeId],
     queryFn: async () => {
@@ -212,6 +214,17 @@ function RecentTasks({ homeId, onViewAll }: { homeId: string; onViewAll: () => v
     },
   })
 
+  const handleQuickComplete = async (taskId: string, frequencyType: string) => {
+    await supabase.from('task_completions').insert({ task_id: taskId, completed_by: session!.user.id, was_overdue: false })
+    if (frequencyType === 'once') {
+      await supabase.from('tasks').update({ is_active: false }).eq('id', taskId)
+    }
+    queryClient.invalidateQueries({ queryKey: ['tasks-upcoming', homeId] })
+    queryClient.invalidateQueries({ queryKey: ['tasks', homeId] })
+    queryClient.invalidateQueries({ queryKey: ['summary', homeId] })
+    toast.success('Completada')
+  }
+
   if (!tasks?.length) return null
 
   return (
@@ -227,10 +240,19 @@ function RecentTasks({ homeId, onViewAll }: { homeId: string; onViewAll: () => v
           const isOverdue = new Date(task.next_due_date!) < new Date()
           return (
             <div key={task.id} className={`flex items-center justify-between rounded-lg px-3 py-2 ${isOverdue ? 'bg-red-50' : 'bg-gray-50'}`}>
-              <span className={`text-sm ${isOverdue ? 'text-red-700 font-medium' : 'text-gray-700'}`}>{task.title}</span>
-              <span className={`text-xs ${isOverdue ? 'text-red-500' : 'text-gray-500'}`}>
-                {new Date(task.next_due_date!).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
-              </span>
+              <span className={`text-sm flex-1 ${isOverdue ? 'text-red-700 font-medium' : 'text-gray-700'}`}>{task.title}</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs ${isOverdue ? 'text-red-500' : 'text-gray-500'}`}>
+                  {new Date(task.next_due_date!).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </span>
+                <button
+                  onClick={() => handleQuickComplete(task.id, task.frequency_type)}
+                  className="flex h-6 w-6 items-center justify-center rounded-full border border-green-400 text-green-600 hover:bg-green-500 hover:text-white hover:border-green-500 transition-all"
+                  title="Completar"
+                >
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                </button>
+              </div>
             </div>
           )
         })}
