@@ -22,8 +22,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#2563eb"
       },
-      "package": "com.controlhogar.app",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.controlhogar.app"
     },
     "plugins": [
       "expo-router",
