@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native'
 import { supabase } from '../src/lib/supabase'
+import * as WebBrowser from 'expo-web-browser'
 import * as Linking from 'expo-linking'
 import { Ionicons } from '@expo/vector-icons'
+
+// Required for web browser to dismiss properly on Android
+WebBrowser.maybeCompleteAuthSession()
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
@@ -19,13 +23,24 @@ export default function LoginScreen() {
 
     setIsLoading(true)
 
-    if (mode === 'login') {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) Alert.alert('Error', error.message)
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) Alert.alert('Error', error.message)
-      else Alert.alert('Registro exitoso', 'Revisa tu email para verificar la cuenta')
+    try {
+      if (mode === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password,
+        })
+        if (error) Alert.alert('Error de inicio de sesión', error.message)
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email: email.trim().toLowerCase(),
+          password,
+          options: { data: { display_name: email.split('@')[0] } },
+        })
+        if (error) Alert.alert('Error de registro', error.message)
+        else Alert.alert('Registro exitoso', 'Revisa tu email para verificar la cuenta')
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Error inesperado')
     }
 
     setIsLoading(false)
@@ -34,7 +49,7 @@ export default function LoginScreen() {
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true)
     try {
-      const redirectUrl = Linking.createURL('/(tabs)')
+      const redirectUrl = Linking.createURL('auth/callback')
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -49,8 +64,35 @@ export default function LoginScreen() {
         return
       }
 
-      if (data?.url) {
-        await Linking.openURL(data.url)
+      if (!data?.url) {
+        Alert.alert('Error', 'No se obtuvo URL de autenticación')
+        return
+      }
+
+      // Open in-app auth browser (Chrome Custom Tab on Android)
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
+
+      if (result.type === 'success' && result.url) {
+        // Parse the URL to get tokens
+        const url = new URL(result.url)
+        // Tokens can be in hash fragment or query params
+        const hashParams = new URLSearchParams(url.hash.substring(1))
+        const queryParams = new URLSearchParams(url.search)
+
+        const accessToken = hashParams.get('access_token') ?? queryParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token') ?? queryParams.get('refresh_token')
+
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+          if (sessionError) Alert.alert('Error', sessionError.message)
+        } else {
+          Alert.alert('Error', 'No se recibieron las credenciales')
+        }
+      } else if (result.type === 'cancel') {
+        // User cancelled, do nothing
       }
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'No se pudo iniciar con Google')
@@ -69,15 +111,18 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Email"
+            placeholderTextColor="#9ca3af"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
+            autoCorrect={false}
           />
           <TextInput
             style={styles.input}
             placeholder="Contraseña"
+            placeholderTextColor="#9ca3af"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -88,6 +133,7 @@ export default function LoginScreen() {
             style={[styles.button, isLoading && styles.buttonDisabled]}
             onPress={handleSubmit}
             disabled={isLoading}
+            activeOpacity={0.8}
           >
             <Text style={styles.buttonText}>
               {isLoading ? 'Cargando...' : mode === 'login' ? 'Iniciar sesión' : 'Registrarse'}
@@ -106,6 +152,7 @@ export default function LoginScreen() {
             style={[styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
             onPress={handleGoogleLogin}
             disabled={isGoogleLoading}
+            activeOpacity={0.8}
           >
             <Ionicons name="logo-google" size={20} color="#374151" />
             <Text style={styles.googleButtonText}>
@@ -138,6 +185,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
+    color: '#111827',
   },
   button: {
     backgroundColor: '#2563eb',

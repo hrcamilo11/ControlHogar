@@ -506,6 +506,7 @@ function MembersSection({ homeId }: { homeId?: string }) {
   const [inviteRole, setInviteRole] = useState('member')
   const [inviteLink, setInviteLink] = useState<string | null>(null)
   const [isInviting, setIsInviting] = useState(false)
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null)
 
   const { data: members } = useQuery({
     queryKey: ['home-members', homeId],
@@ -570,11 +571,35 @@ function MembersSection({ homeId }: { homeId?: string }) {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Miembros ({members.length})</h3>
         {canManage && (
-          <button onClick={() => { setShowInvite(!showInvite); setInviteLink(null) }} className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors">
-            <UserPlus className="h-4 w-4" /> Invitar
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={async () => {
+              const code = Array.from(crypto.getRandomValues(new Uint8Array(3))).map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+              const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+              const { error } = await supabase.from('home_invite_codes').insert({ home_id: homeId, code, created_by: session!.user.id, expires_at: expiresAt })
+              if (error) toast.error(error.message)
+              else { setGeneratedCode(code); toast.success('Código generado') }
+            }} className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+              Generar código
+            </button>
+            <button onClick={() => { setShowInvite(!showInvite); setInviteLink(null) }} className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors">
+              <UserPlus className="h-4 w-4" /> Invitar
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Generated code display */}
+      {generatedCode && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 space-y-2 dark:bg-green-900/20 dark:border-green-800">
+          <p className="text-sm font-medium text-green-800 dark:text-green-300">Código de invitación:</p>
+          <div className="flex items-center gap-3">
+            <span className="text-3xl font-mono font-bold tracking-[0.3em] text-green-900 dark:text-green-200">{generatedCode}</span>
+            <button onClick={() => { navigator.clipboard.writeText(generatedCode); toast.success('Código copiado') }} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700">Copiar</button>
+          </div>
+          <p className="text-xs text-green-700 dark:text-green-400">Válido por 7 días. Máximo 10 usos.</p>
+          <button onClick={() => setGeneratedCode(null)} className="text-xs text-gray-500 underline">Cerrar</button>
+        </div>
+      )}
 
       {/* Invite form */}
       {showInvite && !inviteLink && (

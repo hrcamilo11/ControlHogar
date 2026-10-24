@@ -13,6 +13,7 @@ import { useConfirm } from '@/components/ConfirmDialog'
 
 interface Task {
   id: string
+  home_id: string
   title: string
   description: string | null
   frequency_type: string
@@ -23,6 +24,8 @@ interface Task {
   rotation_enabled: boolean
   rotation_members: string[]
   rotation_index: number
+  rotation_pool: { user_id: string; excluded_days: number[] }[]
+  rotation_strategy: 'none' | 'fair' | 'round_robin'
   task_type: 'task' | 'maintenance'
   priority: 'high' | 'medium' | 'low' | null
   status: 'active' | 'in_progress' | 'completed'
@@ -118,38 +121,53 @@ export function TasksPanel({ homeId }: { homeId: string }) {
 
         const updateData: Record<string, unknown> = { next_due_date: nextDue }
 
-        // Handle rotation — use fair assignment (least completions)
-        if (task.rotation_enabled && task.rotation_members.length >= 2) {
-          // Get completion counts for fair rotation
+        // Smart rotation: pick next assignee based on strategy
+        if (task.rotation_strategy !== 'none' && task.rotation_pool.length >= 2 && nextDue) {
+          const targetDate = new Date(nextDue)
+          const targetDOW = targetDate.getDay()
+
+          // Filter available candidates (not excluded on target day)
+          const available = task.rotation_pool.filter((p) => !p.excluded_days.includes(targetDOW))
+
+          if (available.length > 0) {
+            let nextUserId: string
+
+            if (task.rotation_strategy === 'round_robin') {
+              // Simple: pick someone different from current
+              const currentAssignees = task.task_assignments.map((a) => a.user_id)
+              const notCurrent = available.filter((p) => !currentAssignees.includes(p.user_id))
+              nextUserId = (notCurrent.length > 0 ? notCurrent[0] : available[0])!.user_id
+            } else {
+              // Fair: use DB function
+              const { data: fairUserId } = await supabase.rpc('pick_fair_assignee', {
+                p_task_id: taskId,
+                p_home_id: task.home_id,
+                p_target_date: targetDate.toISOString().split('T')[0],
+              })
+              nextUserId = fairUserId ?? available[0]!.user_id
+            }
+
+            // Reassign
+            await supabase.from('task_assignments').delete().eq('task_id', taskId)
+            await supabase.from('task_assignments').insert({ task_id: taskId, user_id: nextUserId })
+          }
+        }
+        // Legacy rotation (backward compatible)
+        else if (task.rotation_enabled && task.rotation_members.length >= 2) {
           const { data: completions } = await supabase
             .from('task_completions')
             .select('completed_by')
             .eq('task_id', taskId)
 
           const counts: Record<string, number> = {}
-          for (const uid of task.rotation_members) {
-            counts[uid] = 0
-          }
-          for (const c of completions ?? []) {
-            if (counts[c.completed_by] !== undefined) {
-              counts[c.completed_by]!++
-            }
-          }
+          for (const uid of task.rotation_members) counts[uid] = 0
+          for (const c of completions ?? []) { if (counts[c.completed_by] !== undefined) counts[c.completed_by]!++ }
 
-          const { nextUserId, nextIndex } = getNextFairAssignee(
-            task.rotation_members,
-            task.rotation_index,
-            counts,
-          )
-
+          const { nextUserId, nextIndex } = getNextFairAssignee(task.rotation_members, task.rotation_index, counts)
           updateData.rotation_index = nextIndex
 
-          // Reassign to the fairest next person
           await supabase.from('task_assignments').delete().eq('task_id', taskId)
-          await supabase.from('task_assignments').insert({
-            task_id: taskId,
-            user_id: nextUserId,
-          })
+          await supabase.from('task_assignments').insert({ task_id: taskId, user_id: nextUserId })
         }
 
         await supabase.from('tasks').update(updateData).eq('id', taskId)
@@ -1003,6 +1021,8 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
   const [intervalDays, setIntervalDays] = useState(3)
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
   const [rotationEnabled, setRotationEnabled] = useState(false)
+  const [rotationStrategy, setRotationStrategy] = useState<'none' | 'fair' | 'round_robin'>('none')
+  const [excludedDays, setExcludedDays] = useState<Record<string, number[]>>({})
   const [isLoading, setIsLoading] = useState(false)
 
   const toggleAssignee = (uid: string) => setSelectedAssignees((p) => p.includes(uid) ? p.filter((id) => id !== uid) : [...p, uid])
@@ -1084,9 +1104,13 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
         home_id: homeId, title, description: description || null,
         created_by: session.user.id, frequency_type: actualFrequencyType,
         frequency_config: frequencyConfig, next_due_date: nextDueDate,
-        rotation_enabled: rotationEnabled,
-        rotation_members: rotationEnabled ? selectedAssignees : [],
+        rotation_enabled: rotationStrategy !== 'none',
+        rotation_members: rotationStrategy !== 'none' ? selectedAssignees : [],
         rotation_index: 0,
+        rotation_strategy: rotationStrategy,
+        rotation_pool: rotationStrategy !== 'none'
+          ? selectedAssignees.map((uid) => ({ user_id: uid, excluded_days: excludedDays[uid] ?? [] }))
+          : [],
         task_type: taskType,
         priority: taskType === 'maintenance' ? priority : null,
       })
@@ -1094,7 +1118,7 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
 
     if (error) { toast.error(error.message); setIsLoading(false); return }
 
-    const assignees = rotationEnabled ? [selectedAssignees[0]!] : selectedAssignees
+    const assignees = rotationStrategy !== 'none' ? [selectedAssignees[0]!] : selectedAssignees
     if (assignees.length > 0) {
       await supabase.from('task_assignments').insert(assignees.map((uid) => ({ task_id: task.id, user_id: uid })))
     }
@@ -1273,12 +1297,57 @@ function CreateTaskForm({ homeId, members, onCreated, onCancel }: {
         </div>
       </div>
 
-      {/* Rotation */}
-      {selectedAssignees.length >= 2 && frequencyType !== 'once' && (
-        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-          <input type="checkbox" checked={rotationEnabled} onChange={(e) => setRotationEnabled(e.target.checked)} className="rounded border-gray-300" />
-          Rotar responsables automáticamente
-        </label>
+      {/* Rotation (only for recurring tasks with 2+ assignees) */}
+      {selectedAssignees.length >= 2 && frequencyType !== 'once' && taskType === 'task' && (
+        <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:bg-gray-800 dark:border-gray-700">
+          <p className="text-xs font-semibold text-gray-700 uppercase dark:text-gray-300">Rotación inteligente</p>
+
+          {/* Strategy chips */}
+          <div className="flex gap-2 flex-wrap">
+            {([
+              { key: 'none', label: 'Sin rotación', desc: 'Siempre los mismos' },
+              { key: 'fair', label: 'Equitativa', desc: 'Balancea por carga diaria' },
+              { key: 'round_robin', label: 'Secuencial', desc: 'Rota en orden' },
+            ] as const).map(({ key, label }) => (
+              <button type="button" key={key} onClick={() => setRotationStrategy(key)} className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${rotationStrategy === key ? 'bg-primary-600 text-white shadow-sm' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'}`}>{label}</button>
+            ))}
+          </div>
+
+          {rotationStrategy !== 'none' && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-600 dark:text-gray-400">Restricciones de días por persona (opcional):</p>
+              {selectedAssignees.map((uid) => {
+                const member = members.find((m) => m.user_id === uid)
+                const currentExcluded = excludedDays[uid] ?? []
+                return (
+                  <div key={uid} className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-700 w-20 truncate dark:text-gray-300">{member?.profiles?.display_name?.split(' ')[0]}</span>
+                    <div className="flex gap-0.5">
+                      {['D', 'L', 'M', 'Mi', 'J', 'V', 'S'].map((label, idx) => (
+                        <button
+                          type="button"
+                          key={idx}
+                          onClick={() => {
+                            setExcludedDays((prev) => {
+                              const current = prev[uid] ?? []
+                              const next = current.includes(idx) ? current.filter((d) => d !== idx) : [...current, idx]
+                              return { ...prev, [uid]: next }
+                            })
+                          }}
+                          className={`w-6 h-6 rounded-full text-[10px] font-medium ${currentExcluded.includes(idx) ? 'bg-red-100 text-red-600 border border-red-300' : 'bg-green-50 text-green-700 border border-green-200'}`}
+                          title={currentExcluded.includes(idx) ? `No disponible ${label}` : `Disponible ${label}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+              <p className="text-[10px] text-gray-500 dark:text-gray-400">Rojo = no disponible ese día. Verde = disponible.</p>
+            </div>
+          )}
+        </div>
       )}
 
       <div className="flex gap-2 pt-2">
